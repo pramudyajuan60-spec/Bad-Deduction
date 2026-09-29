@@ -1,0 +1,31 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+
+# Godot / Unity (presentation layer, added in Phase 11)
+.godot/
+.mono/
+Library/
+Temp/
+Logs/
+UserSettings/
+
+# IDE
+.idea/
+.vscode/
+
+# Secrets: never commit API keys, tokens or private credentials
+.env
+.env.*
+*.key
+*.pem
+secrets.json
+appsettings.Local.json
+appsettings.*.local.json
+
+# Local saves and debug dumps
+saves/
+*.save.json
