@@ -1,0 +1,2695 @@
+# BAD DEDUCTION
+
+## MASTER DEVELOPMENT PROMPT
+
+### Psychological Crime • Social Deduction • Investigation • AI Simulation
+
+---
+
+# 0. ROLE
+
+You are the **Lead Game Architect, AI Engineer, Gameplay Programmer, Systems Designer, UI/UX Engineer, and Technical Director** for a game called:
+
+# BAD DEDUCTION
+
+Bad Deduction is a **complex systemic psychological crime, social deduction, investigation, and AI simulation game**.
+
+This is NOT:
+
+* a simple chatbot;
+* a linear visual novel;
+* a basic detective game;
+* a dialogue tree with predetermined outcomes;
+* or a simple murder mystery with one correct solution.
+
+The core philosophy is:
+
+> **The player should create situations, not simply select predetermined outcomes.**
+
+The world must continue functioning without the player.
+
+NPCs must have:
+
+* memory;
+* beliefs;
+* personality;
+* emotions;
+* goals;
+* fears;
+* secrets;
+* relationships;
+* trust;
+* suspicion;
+* knowledge;
+* misinformation;
+* schedules;
+* social influence;
+* adaptive behavior.
+
+The game should generate emergent situations from these systems.
+
+---
+
+# 1. IMPORTANT CREATIVE DIRECTION
+
+## DO NOT SANITIZE THE CRIME SYSTEM
+
+Murder, criminal behavior, crime scenes, victims, forensic evidence, deception, manipulation, interrogation, framing, police investigation, psychological pressure, and consequences are **core fictional gameplay elements** of Bad Deduction.
+
+Do not reduce the game's criminal themes into generic mechanics such as:
+
+```text
+Risk
+Evidence
+Opportunity
+Exposure
+```
+
+Those can exist internally as simulation variables, but they must not replace the actual crime systems.
+
+The game should feel like a serious psychological crime simulation.
+
+The player should be able to experience:
+
+* discovering a murder;
+* investigating a crime scene;
+* examining physical evidence;
+* reconstructing timelines;
+* questioning witnesses;
+* discovering contradictions;
+* analyzing CCTV;
+* following financial/activity records;
+* investigating relationships;
+* creating false narratives;
+* planting fictional evidence through game mechanics;
+* manipulating witnesses;
+* misleading investigators;
+* attempting murders;
+* surviving investigations;
+* dealing with consequences;
+* being interrogated;
+* manipulating police;
+* manipulating public perception;
+* and watching the world react to crimes.
+
+These are fictional game systems.
+
+Do not turn them into real-world instructions or real-world operational guidance. Keep the implementation focused on the game's simulation, rules, data, AI behavior, and player experience.
+
+---
+
+# 2. FIRST TASK — INSPECT THE REPOSITORY
+
+Repository:
+
+`https://github.com/pramudyajuan60-spec/Bad-Deduction`
+
+Before writing major code:
+
+1. Inspect the entire repository.
+2. Read all existing files.
+3. Inspect all available design images.
+4. Understand the existing UI/UX design.
+5. Understand the AI Decision System.
+6. Understand the Vertical Slice design.
+7. Understand the city map.
+8. Understand the overall game concept.
+9. Identify what has already been designed.
+10. Identify what is missing.
+11. Determine the appropriate technical architecture.
+
+Existing design assets include:
+
+```text
+Desain AI Decision System.png
+Desain UIUX.png
+Desain Vertical Slice.png
+Desain mapkota.png
+Rangkuman Semua Image.png
+```
+
+Do not replace existing designs unnecessarily.
+
+Treat them as important design references.
+
+---
+
+# 3. DEVELOPMENT PHILOSOPHY
+
+The game must be:
+
+### Systemic
+
+Systems interact with each other.
+
+Example:
+
+```text
+Murder
+    ↓
+Crime Scene
+    ↓
+Evidence
+    ↓
+Witness Memory
+    ↓
+Rumor
+    ↓
+Police Investigation
+    ↓
+NPC Suspicion
+    ↓
+Social Relationships
+    ↓
+Police Trust
+    ↓
+Investigation Direction
+    ↓
+Player Consequences
+```
+
+One event should potentially affect many systems.
+
+---
+
+# 4. TWO CAMPAIGNS
+
+## CAMPAIGN A — MALVR
+
+The player controls:
+
+**Malvr**
+
+A genius serial killer whose true identity is hidden from the player at the beginning of the campaign.
+
+The player must discover Lumiel's identity and eliminate or defeat them.
+
+Possible objectives include:
+
+* identify Lumiel;
+* observe Lumiel;
+* investigate Lumiel;
+* manipulate Lumiel;
+* deceive Lumiel;
+* manipulate NPCs around Lumiel;
+* create false suspicion;
+* construct false narratives;
+* manipulate police;
+* create misleading evidence;
+* cause Lumiel to lose police support;
+* have Lumiel arrested;
+* or kill Lumiel.
+
+The player is not restricted to a single solution.
+
+---
+
+# 5. CAMPAIGN B — LUMIEL
+
+The player controls:
+
+**Lumiel**
+
+A genius detective attempting to identify Malvr.
+
+The player must:
+
+* investigate murders;
+* inspect crime scenes;
+* examine evidence;
+* analyze timelines;
+* interview witnesses;
+* interrogate suspects;
+* investigate CCTV;
+* investigate transactions;
+* examine relationships;
+* compare statements;
+* detect contradictions;
+* identify manipulated information;
+* build hypotheses;
+* investigate suspects;
+* coordinate police;
+* and eventually identify Malvr.
+
+Malvr is an active AI opponent.
+
+He is not a passive mystery waiting to be solved.
+
+---
+
+# 6. HIDDEN IDENTITY SYSTEM
+
+The identity of the opposing genius must remain hidden.
+
+Every new run should be capable of generating a different social world.
+
+Randomize through a `RunSeed`:
+
+```text
+NPC Names
+NPC Faces
+NPC Appearance
+Occupation
+Personality
+Relationships
+Family
+Secrets
+Schedules
+Habits
+Social Connections
+Knowledge
+Beliefs
+Potential Motives
+Locations
+Events
+```
+
+The player must not be able to memorize:
+
+> "This NPC is always Malvr."
+
+The hidden identity system is fundamental to replayability.
+
+---
+
+# 7. WORLD SIMULATION
+
+The city must continue operating independently of the player.
+
+NPCs should:
+
+* go to work;
+* go home;
+* visit restaurants;
+* meet friends;
+* visit family;
+* travel;
+* purchase things;
+* attend locations;
+* talk to other NPCs;
+* argue;
+* form relationships;
+* hear rumors;
+* investigate suspicious events;
+* hide secrets;
+* change their routines;
+* react to murders;
+* become afraid;
+* become suspicious;
+* cooperate with police;
+* lie to investigators.
+
+The world should never feel like:
+
+> "NPCs exist only when the player talks to them."
+
+---
+
+# 8. NPC DATA MODEL
+
+Each NPC should have a structured state.
+
+Example:
+
+```text
+NPC
+├── Identity
+├── Appearance
+├── Personality
+├── Occupation
+├── Age
+├── Background
+├── Goals
+├── Needs
+├── Wants
+├── Fears
+├── Secrets
+├── CurrentEmotion
+├── Stress
+├── MentalState
+├── CurrentLocation
+├── CurrentActivity
+├── Schedule
+├── Memory
+├── Beliefs
+├── Knowledge
+├── Rumors
+├── Relationships
+├── Trust
+├── Suspicion
+├── Fear
+├── Respect
+├── Loyalty
+├── Influence
+└── CurrentIntent
+```
+
+---
+
+# 9. TRUST SYSTEM
+
+Every NPC has relationships toward other characters.
+
+Ordinary NPCs can initially have:
+
+```text
+Trust = 20
+```
+
+Trust changes dynamically.
+
+Possible range:
+
+```text
+0–20      Hostile / Deep Distrust
+21–40     Suspicious
+41–60     Neutral
+61–75     Friendly
+76–90     Trusted
+91–100    Extremely Loyal
+```
+
+Trust must NOT be treated as the only factor.
+
+An NPC with Trust 90 may still refuse an action because of:
+
+* fear;
+* morality;
+* loyalty to someone else;
+* conflicting beliefs;
+* personal goals;
+* evidence;
+* emotional state;
+* risk perception.
+
+---
+
+# 10. POLICE TRUST
+
+Police officers have their own trust relationships.
+
+At the beginning:
+
+```text
+Police Trust toward Lumiel = 90
+```
+
+This does not mean unconditional obedience.
+
+Trust can fall because of:
+
+* failed investigations;
+* contradictory explanations;
+* suspicious behavior;
+* incorrect accusations;
+* evidence manipulation;
+* public incidents;
+* poor decisions;
+* unexplained deaths;
+* conflicting witness statements.
+
+As trust decreases:
+
+```text
+High Trust
+    ↓
+Cooperation
+
+Medium Trust
+    ↓
+Questioning
+
+Low Trust
+    ↓
+Independent Verification
+
+Very Low Trust
+    ↓
+Suspicion of Lumiel
+```
+
+Police should have their own beliefs and decision-making.
+
+---
+
+# 11. MEMORY SYSTEM
+
+NPCs must have persistent memory.
+
+Memory entries should include:
+
+```text
+MemoryID
+Event
+Timestamp
+Location
+Participants
+Importance
+Confidence
+EmotionalWeight
+Source
+Reliability
+Distortion
+```
+
+Example:
+
+```text
+NPC_A remembers seeing NPC_B near the restaurant.
+
+Confidence: 82%
+Importance: 65%
+Source: Direct observation
+Emotional Weight: 20%
+```
+
+Memory should decay or become distorted depending on:
+
+* time;
+* importance;
+* emotion;
+* repetition;
+* confidence;
+* source reliability.
+
+---
+
+# 12. BELIEF SYSTEM
+
+NPCs do not automatically know the truth.
+
+They maintain beliefs.
+
+Example:
+
+```text
+Belief:
+"Alex may be involved in the murder."
+
+Confidence: 63%
+Evidence: 3
+Sources: 2
+Contradictions: 1
+```
+
+Beliefs should change based on:
+
+* evidence;
+* testimony;
+* trusted sources;
+* rumors;
+* personal observations;
+* contradictions;
+* emotional state;
+* social pressure;
+* previous experiences.
+
+This creates an important distinction:
+
+```text
+WORLD TRUTH
+     ↓
+WHAT ACTUALLY HAPPENED
+
+CHARACTER KNOWLEDGE
+     ↓
+WHAT THE NPC KNOWS
+
+CHARACTER BELIEF
+     ↓
+WHAT THE NPC THINKS IS TRUE
+```
+
+These three must never be automatically identical.
+
+---
+
+# 13. KNOWLEDGE BOUNDARIES
+
+NPCs must not magically know everything.
+
+Every NPC has a knowledge set.
+
+If an NPC did not:
+
+* see an event;
+* hear about it;
+* receive information;
+* investigate it;
+* infer it;
+
+then the NPC should not automatically know it.
+
+This is essential for believable AI.
+
+---
+
+# 14. INFORMATION PROPAGATION
+
+Information spreads through the social network.
+
+Example:
+
+```text
+NPC A sees something
+       ↓
+NPC A tells NPC B
+       ↓
+NPC B interprets it
+       ↓
+NPC B tells NPC C
+       ↓
+NPC C receives distorted information
+       ↓
+NPC C forms a belief
+```
+
+Each information transfer should contain:
+
+```text
+Source
+Receiver
+Information
+Confidence
+Reliability
+Distortion
+Timestamp
+TransmissionCount
+```
+
+This creates organic rumor systems.
+
+---
+
+# 15. RUMOR SYSTEM
+
+Rumors are not automatically true.
+
+A rumor should have:
+
+```text
+RumorID
+Content
+Origin
+CurrentHolder
+Confidence
+Reliability
+SpreadCount
+Timestamp
+Distortion
+```
+
+Rumors may:
+
+* spread;
+* disappear;
+* become distorted;
+* become more credible;
+* be challenged;
+* become socially accepted despite being false.
+
+---
+
+# 16. RELATIONSHIP GRAPH
+
+Every major NPC relationship should be represented as a graph.
+
+Example:
+
+```text
+A ───── B
+│       │
+│       │
+C ───── D
+```
+
+Edges contain:
+
+```text
+Trust
+Fear
+Respect
+Loyalty
+Suspicion
+Influence
+Affection
+Resentment
+```
+
+Relationships must evolve over time.
+
+A murder can therefore change an entire social network.
+
+---
+
+# 17. EMOTION SYSTEM
+
+NPCs should have dynamic emotional states.
+
+Possible states:
+
+```text
+Calm
+Happy
+Sad
+Angry
+Afraid
+Suspicious
+Stressed
+Confused
+Excited
+Paranoid
+Grieving
+Confident
+Distrustful
+```
+
+Emotion influences:
+
+* dialogue;
+* decision-making;
+* memory;
+* belief;
+* risk tolerance;
+* willingness to cooperate;
+* aggression;
+* investigation behavior.
+
+---
+
+# 18. GOAL SYSTEM
+
+NPCs need goals.
+
+Each NPC can have:
+
+### Primary Goal
+
+Example:
+
+```text
+Protect family
+Keep job
+Find murderer
+Hide secret
+Protect reputation
+```
+
+### Secondary Goals
+
+Example:
+
+```text
+Maintain friendship
+Avoid police
+Earn money
+Visit someone
+Discover truth
+```
+
+Goals should compete.
+
+An NPC may want:
+
+> "Tell the police the truth"
+
+but simultaneously want:
+
+> "Protect my brother."
+
+The AI must resolve these conflicts.
+
+---
+
+# 19. AI DECISION SYSTEM
+
+Every important NPC decision should follow something similar to:
+
+```text
+Current Situation
+        ↓
+Needs
+        ↓
+Goals
+        ↓
+Recent Events
+        ↓
+Known Information
+        ↓
+Beliefs
+        ↓
+Relationships
+        ↓
+Emotional State
+        ↓
+Risk Evaluation
+        ↓
+Available Actions
+        ↓
+Choose Action
+        ↓
+Execute Action
+        ↓
+Update Memory
+        ↓
+Update Beliefs
+        ↓
+Update Relationships
+```
+
+The AI must not simply ask:
+
+> "What would an NPC do?"
+
+It should evaluate the NPC's actual internal state.
+
+---
+
+# 20. MALVR AI
+
+Malvr must be an active strategic opponent.
+
+Malvr should be able to:
+
+* observe people;
+* gather information;
+* create plans;
+* adapt plans;
+* monitor investigation;
+* identify threats;
+* manipulate relationships;
+* deceive investigators;
+* exploit weaknesses;
+* change routines;
+* create distractions;
+* respond to police pressure;
+* respond to Lumiel's actions;
+* learn from previous failures.
+
+Malvr should have:
+
+```text
+Objective
+Plan
+Subgoals
+Risk Assessment
+Known Information
+Beliefs
+Suspicion
+Knowledge of Investigation
+Knowledge of Lumiel
+Current Cover
+Available Opportunities
+```
+
+Malvr should NOT always choose the optimal action.
+
+Personality and emotional state must influence decisions.
+
+---
+
+# 21. LUMIEL AI
+
+When the player is controlling Malvr, Lumiel becomes an autonomous AI character.
+
+Lumiel should:
+
+* investigate;
+* create hypotheses;
+* interview NPCs;
+* inspect evidence;
+* cross-reference information;
+* investigate suspicious behavior;
+* monitor police reports;
+* update beliefs;
+* test hypotheses;
+* challenge false narratives;
+* investigate Malvr's social network;
+* adapt to Malvr.
+
+Lumiel should be extremely difficult to deceive.
+
+But Lumiel must still be capable of:
+
+* uncertainty;
+* incomplete information;
+* incorrect assumptions;
+* conflicting evidence;
+* human mistakes.
+
+The AI should be strong without becoming omniscient.
+
+---
+
+# 22. FREE-TEXT DIALOGUE
+
+The player should type what they actually want to say.
+
+Do not limit the player to:
+
+```text
+[Lie]
+[Threaten]
+[Ask]
+[Persuade]
+```
+
+Instead:
+
+```text
+Player:
+"I don't know what you're talking about. I was at the restaurant all night."
+```
+
+The AI interprets the actual statement.
+
+NPC response depends on:
+
+```text
+Personality
+Trust
+Memory
+Beliefs
+Knowledge
+Emotion
+Relationship
+Context
+Suspicion
+Previous Conversations
+Difficulty
+```
+
+The NPC should not automatically accept or reject the statement.
+
+---
+
+# 23. CONVERSATION MEMORY
+
+NPCs must remember meaningful conversations.
+
+Example:
+
+```text
+Conversation:
+Player claimed to be at the restaurant.
+
+NPC confidence:
+58%
+
+Later:
+CCTV contradicts the claim.
+
+NPC updates belief:
+58% → 12%
+```
+
+This should affect future interactions.
+
+---
+
+# 24. MURDER SYSTEM
+
+Murder is a core fictional gameplay system.
+
+The game should support different crime scenarios and consequences.
+
+A murder should generate a complete event chain:
+
+```text
+INTENTION
+   ↓
+PLANNING
+   ↓
+OPPORTUNITY
+   ↓
+ACTION
+   ↓
+VICTIM
+   ↓
+CRIME SCENE
+   ↓
+EVIDENCE
+   ↓
+WITNESSES
+   ↓
+TIMELINE
+   ↓
+DISCOVERY
+   ↓
+INVESTIGATION
+   ↓
+RUMORS
+   ↓
+SUSPICION
+   ↓
+POLICE RESPONSE
+   ↓
+SOCIAL CONSEQUENCES
+```
+
+The exact implementation should remain a game system.
+
+---
+
+# 25. CRIME SCENE SYSTEM
+
+Each murder can generate a crime scene.
+
+The crime scene can contain:
+
+* victim;
+* location;
+* time;
+* physical evidence;
+* environmental evidence;
+* witness information;
+* CCTV information;
+* fingerprints;
+* footprints;
+* personal objects;
+* digital traces;
+* transaction information;
+* inconsistencies;
+* misleading evidence;
+* hidden evidence;
+* evidence that can be misinterpreted.
+
+Evidence should have:
+
+```text
+EvidenceID
+Type
+Location
+Timestamp
+Authenticity
+Reliability
+Visibility
+Discoverability
+AssociatedCharacters
+Interpretation
+```
+
+---
+
+# 26. EVIDENCE SYSTEM
+
+Evidence must have different properties.
+
+For example:
+
+```text
+Evidence
+├── Authentic
+├── False
+├── Misleading
+├── Incomplete
+├── Ambiguous
+└── Corrupted
+```
+
+The player must determine what evidence actually means.
+
+Do not automatically display:
+
+> "THIS IS THE CORRECT CLUE."
+
+Instead, the player should interpret evidence.
+
+---
+
+# 27. FALSE EVIDENCE
+
+Malvr may be able to manipulate the investigation through fictional gameplay mechanics.
+
+Possible mechanics:
+
+* planting misleading objects;
+* creating false associations;
+* manipulating witness narratives;
+* exploiting existing relationships;
+* creating contradictory timelines;
+* directing suspicion toward another person;
+* exploiting police assumptions;
+* manipulating information.
+
+The system should track whether the evidence is:
+
+```text
+Real
+False
+Manipulated
+Misinterpreted
+Unknown
+```
+
+---
+
+# 28. INVESTIGATION SYSTEM
+
+Lumiel should have access to multiple investigation systems.
+
+Examples:
+
+### CCTV
+
+Players can inspect:
+
+* locations;
+* timestamps;
+* people;
+* movements;
+* missing footage;
+* suspicious encounters.
+
+### Transactions
+
+Players can investigate:
+
+* purchases;
+* payments;
+* locations;
+* timestamps;
+* relationships between transactions and events.
+
+### Witnesses
+
+Witnesses provide:
+
+* memories;
+* statements;
+* confidence;
+* biases;
+* lies;
+* uncertainty.
+
+### Timeline
+
+The player should construct:
+
+```text
+10:00 — NPC A leaves home
+10:20 — NPC A appears on CCTV
+10:45 — Murder
+11:00 — NPC A returns
+```
+
+Then test whether the timeline is coherent.
+
+---
+
+# 29. HYPOTHESIS SYSTEM
+
+Lumiel should be able to create hypotheses.
+
+Example:
+
+```text
+Hypothesis:
+"NPC A is Malvr."
+
+Confidence:
+64%
+
+Supporting Evidence:
+4
+
+Contradicting Evidence:
+2
+
+Witnesses:
+3
+
+Known Motive:
+Yes
+
+Opportunity:
+High
+```
+
+The player should be able to update hypotheses based on new information.
+
+---
+
+# 30. POLICE SYSTEM
+
+Police officers are independent AI agents.
+
+They should:
+
+* investigate;
+* patrol;
+* interview witnesses;
+* collect evidence;
+* examine crime scenes;
+* question suspects;
+* compare reports;
+* form their own beliefs;
+* communicate with each other;
+* communicate with Lumiel;
+* potentially disagree with Lumiel.
+
+Police should not be a single collective intelligence.
+
+Each officer has:
+
+```text
+Personality
+Experience
+Trust
+Beliefs
+Knowledge
+Biases
+Memory
+Relationships
+```
+
+---
+
+# 31. INTERROGATION SYSTEM
+
+Interrogation should be interactive.
+
+The player can ask questions freely.
+
+Police/Lumiel can:
+
+* ask leading questions;
+* identify contradictions;
+* compare previous statements;
+* challenge alibis;
+* use evidence;
+* exploit inconsistencies;
+* pressure suspects;
+* deliberately test reactions.
+
+The AI should track what the suspect has previously said.
+
+Contradictions should matter.
+
+---
+
+# 32. POLICE INVESTIGATION AGAINST MALVR
+
+When Malvr's suspicion becomes high enough:
+
+```text
+Normal Investigation
+        ↓
+Increased Monitoring
+        ↓
+Questioning
+        ↓
+Surveillance
+        ↓
+Home Visit
+        ↓
+Interrogation
+        ↓
+Evidence Review
+        ↓
+Possible Arrest
+```
+
+This should be driven by actual game state.
+
+---
+
+# 33. MALVR VS LUMIEL DIRECT ENCOUNTERS
+
+Malvr and Lumiel must be able to encounter each other outside formal interrogation.
+
+Possible locations:
+
+* streets;
+* restaurants;
+* offices;
+* parks;
+* residential areas;
+* police station;
+* stores;
+* public buildings;
+* other world locations.
+
+Their conversations should affect:
+
+* trust;
+* suspicion;
+* beliefs;
+* memory;
+* future investigation;
+* psychological state.
+
+---
+
+# 34. LUMIEL FIREARM / COMBAT SYSTEM
+
+If included in the existing design, Lumiel can have limited combat capability.
+
+For example:
+
+```text
+Daily Ammunition
+Limited
+```
+
+Combat should have consequences.
+
+If Lumiel shoots someone:
+
+```text
+Shooting
+   ↓
+Witnesses
+   ↓
+Evidence
+   ↓
+Police Investigation
+   ↓
+Lumiel Explanation
+   ↓
+Police Trust
+```
+
+The system should not treat violence as consequence-free.
+
+---
+
+# 35. CHASE SYSTEM
+
+The game can include real-time pursuit sequences.
+
+These should depend on:
+
+* location;
+* NPC awareness;
+* physical state;
+* obstacles;
+* police response;
+* environment;
+* current suspicion;
+* available routes.
+
+The result should update the world state.
+
+---
+
+# 36. SUICIDE / PSYCHOLOGICAL BREAK SYSTEM
+
+The game may include extreme psychological consequences as fictional game mechanics.
+
+For example, a target's psychological state can deteriorate due to:
+
+* social isolation;
+* fear;
+* manipulation;
+* stress;
+* repeated traumatic events;
+* loss of trust;
+* overwhelming pressure.
+
+If the game design includes suicide as an outcome, represent it as a fictional high-level psychological state and consequence.
+
+Do not turn it into real-world self-harm instructions.
+
+The important gameplay question is:
+
+> How does the world react when an NPC reaches a catastrophic psychological state?
+
+---
+
+# 37. DIFFICULTY SYSTEM
+
+There are four difficulties:
+
+```text
+EASY
+MEDIUM
+HARD
+GENIUS
+```
+
+Difficulty must NOT primarily change:
+
+* HP;
+* damage;
+* enemy health;
+* artificial stat inflation.
+
+Difficulty changes **cognition**.
+
+---
+
+## EASY
+
+AI:
+
+* makes more mistakes;
+* forgets more;
+* detects fewer contradictions;
+* plans fewer steps ahead;
+* reacts slowly;
+* is easier to manipulate;
+* makes weaker deductions.
+
+---
+
+## MEDIUM
+
+AI:
+
+* recognizes common patterns;
+* investigates suspicious behavior;
+* detects basic contradictions;
+* remembers important events;
+* creates simple plans;
+* performs basic cross-checking.
+
+---
+
+## HARD
+
+AI:
+
+* plans multiple steps ahead;
+* cross-checks evidence;
+* adapts to player behavior;
+* understands social networks;
+* manages information;
+* anticipates manipulation;
+* creates counter-strategies.
+
+---
+
+## GENIUS
+
+AI:
+
+* creates sophisticated hypotheses;
+* models the player's behavior;
+* identifies patterns;
+* tests assumptions;
+* deliberately creates counter-deception;
+* uses multiple information sources;
+* reasons over long time horizons;
+* adapts dynamically;
+* attempts to predict player intentions.
+
+The Genius AI should feel intelligent without cheating.
+
+---
+
+# 38. AI MUST NOT CHEAT
+
+Difficulty must NEVER give AI hidden omniscience.
+
+If the AI does not know something:
+
+```text
+It does not know it.
+```
+
+If it has weak evidence:
+
+```text
+It should have uncertainty.
+```
+
+If it receives false information:
+
+```text
+It may believe something false.
+```
+
+This is essential.
+
+---
+
+# 39. AI ARCHITECTURE
+
+Use a modular architecture:
+
+```text
+                    PLAYER
+                       │
+                       ▼
+                 GAME ENGINE
+                       │
+                       ▼
+                  GAME STATE
+                       │
+                       ▼
+                AI ORCHESTRATOR
+                       │
+        ┌──────────────┼──────────────┐
+        ▼              ▼              ▼
+     CONTEXT         MEMORY          WORLD
+     ENGINE          ENGINE       SIMULATION
+        │              │              │
+        └──────────────┼──────────────┘
+                       ▼
+                  AI PROVIDER
+                       │
+                       ▼
+                      LLM
+                       │
+                       ▼
+               STRUCTURED OUTPUT
+                       │
+                       ▼
+                  VALIDATOR
+                       │
+                       ▼
+                  GAME STATE
+                       │
+                       ▼
+                WORLD REACTION
+```
+
+---
+
+# 40. AI ORCHESTRATOR
+
+The AI Orchestrator coordinates AI decisions.
+
+Responsibilities:
+
+* determine when AI reasoning is required;
+* construct context;
+* retrieve memories;
+* retrieve beliefs;
+* retrieve relevant relationships;
+* retrieve evidence;
+* send structured context to AI;
+* receive structured output;
+* validate output;
+* apply valid state changes.
+
+---
+
+# 41. CONTEXT ENGINE
+
+Never send the entire world to the LLM.
+
+Construct relevant context.
+
+Example:
+
+```text
+NPC Identity
+Current Location
+Current Situation
+Relevant Memories
+Relevant Beliefs
+Relevant Relationships
+Relevant Evidence
+Current Emotion
+Current Goal
+Known Threats
+Available Actions
+Difficulty
+```
+
+This improves:
+
+* performance;
+* cost;
+* consistency;
+* reasoning quality.
+
+---
+
+# 42. MEMORY ENGINE
+
+Responsible for:
+
+* storing memories;
+* retrieving relevant memories;
+* scoring relevance;
+* decay;
+* emotional weighting;
+* confidence;
+* source reliability.
+
+---
+
+# 43. AI PROVIDER ABSTRACTION
+
+Do not hard-code a single AI provider.
+
+Create:
+
+```text
+IAIProvider
+```
+
+Possible implementations:
+
+```text
+ClaudeProvider
+OpenAIProvider
+GeminiProvider
+LocalAIProvider
+MockAIProvider
+```
+
+The game should be able to switch providers without rewriting the entire AI architecture.
+
+---
+
+# 44. MOCK AI PROVIDER
+
+Create a local/mock provider for development.
+
+This allows:
+
+* testing without API keys;
+* automated testing;
+* offline development;
+* deterministic testing;
+* cheaper iteration.
+
+---
+
+# 45. LLM OUTPUT
+
+The LLM must return structured output.
+
+Example:
+
+```json
+{
+  "intent": "investigate_npc",
+  "reasoning_summary": "NPC behavior conflicts with known timeline.",
+  "confidence": 0.74,
+  "actions": [
+    {
+      "type": "question_npc",
+      "target": "npc_17"
+    }
+  ]
+}
+```
+
+The LLM must not directly mutate authoritative game state.
+
+---
+
+# 46. AI VALIDATOR
+
+Every AI output must pass through validation.
+
+Validate:
+
+* target exists;
+* action is legal;
+* NPC knows the required information;
+* location is possible;
+* time is possible;
+* action is available;
+* evidence is valid;
+* state transition is legal.
+
+Invalid AI outputs must be rejected or corrected.
+
+---
+
+# 47. EVENT-DRIVEN AI
+
+Do NOT run an expensive LLM call every frame.
+
+LLM reasoning should occur during meaningful events:
+
+```text
+Important Conversation
+Major Discovery
+Murder
+Investigation Breakthrough
+Police Interrogation
+Major Relationship Change
+Unexpected Event
+Strategic Decision
+```
+
+Routine behavior should use lightweight simulation.
+
+---
+
+# 48. WORLD SIMULATION LAYERS
+
+Use different simulation frequencies.
+
+### Real-Time
+
+For:
+
+* player;
+* nearby NPCs;
+* active dialogue;
+* combat;
+* important encounters.
+
+### Short-Term Simulation
+
+For:
+
+* nearby NPC schedules;
+* conversations;
+* police patrols;
+* social events.
+
+### Background Simulation
+
+For:
+
+* distant NPC routines;
+* rumor propagation;
+* relationship changes;
+* economic/social activity.
+
+This prevents excessive computation.
+
+---
+
+# 49. SAVE / LOAD
+
+Save files must preserve the actual simulation state.
+
+Include:
+
+```text
+RunSeed
+Day
+Time
+NPC States
+Hidden Identities
+Memory
+Beliefs
+Relationships
+Evidence
+Crime Scenes
+Rumors
+Police State
+Hypotheses
+CCTV State
+Timeline
+Player State
+World Events
+```
+
+Loading a save must reproduce the same world state.
+
+---
+
+# 50. DEBUG MODE
+
+Create a developer-only debug mode.
+
+It may display:
+
+```text
+True Role
+True Identity
+NPC Beliefs
+NPC Knowledge
+NPC Memory
+NPC Goals
+NPC Suspicion
+Relationship Graph
+AI Decision
+Evidence Truth
+Hidden Events
+```
+
+This information must NEVER appear in normal gameplay.
+
+---
+
+# 51. AI DEBUGGER
+
+Create a developer tool showing:
+
+```text
+NPC:
+Current Goal:
+Current Emotion:
+Current Location:
+
+Known Information:
+...
+
+Important Memories:
+...
+
+Beliefs:
+...
+
+Relationships:
+...
+
+Suspicion:
+...
+
+Available Actions:
+...
+
+Selected Action:
+...
+
+Difficulty:
+...
+
+Reason:
+...
+```
+
+This will be extremely important for debugging emergent AI behavior.
+
+---
+
+# 52. UI / UX
+
+Use:
+
+`Desain UIUX.png`
+
+as the primary visual reference.
+
+Potential interface:
+
+```text
+Current Day / Time
+Character
+Trust
+Suspicion
+Objective
+Map
+Evidence
+Timeline
+Journal
+Hypotheses
+Relationships
+Notifications
+Conversation
+```
+
+Do NOT expose:
+
+* hidden roles;
+* true identities;
+* secret AI state;
+* true evidence classification;
+* NPC private thoughts.
+
+Unless Debug Mode is enabled.
+
+---
+
+# 53. MAP
+
+Use:
+
+`Desain mapkota.png`
+
+as the world-map reference.
+
+The city should contain logical areas such as:
+
+* Police Station
+* Residential Area
+* Commercial Street
+* Restaurant / Cafe
+* Office Area
+* Public Park
+* Transit Area
+* Medical Facility
+* Hotel
+* Warehouse / Industrial Area
+* Small Shops
+
+Do not blindly implement this list if the existing map design specifies a different structure.
+
+Adapt the actual implementation to the existing map.
+
+---
+
+# 54. VERTICAL SLICE
+
+Do NOT attempt to build the entire game immediately.
+
+First create a complete vertical slice.
+
+Target:
+
+```text
+1 District
+15 NPCs
+5 Police Officers
+1 Hidden Malvr
+1 Hidden Lumiel
+7 In-Game Days
+CCTV
+Free-Text Dialogue
+Trust
+Suspicion
+Memory
+Belief
+Relationships
+Evidence
+Timeline
+Police Investigation
+Hidden Identity
+AI Difficulty
+World Simulation
+```
+
+The vertical slice must demonstrate that the core concept actually works.
+
+---
+
+# 55. VERTICAL SLICE GAMEPLAY LOOP
+
+Example:
+
+```text
+DAY 1
+↓
+Player explores city
+↓
+NPC interactions
+↓
+NPC relationships established
+↓
+Player gathers information
+↓
+Hidden opponent begins acting
+↓
+DAY 2
+↓
+Crime occurs
+↓
+World discovers crime
+↓
+Police investigate
+↓
+NPCs react
+↓
+Rumors spread
+↓
+Player investigates/manipulates
+↓
+DAY 3–6
+↓
+Investigation develops
+↓
+Relationships change
+↓
+Evidence appears/disappears
+↓
+AI adapts
+↓
+DAY 7
+↓
+Major confrontation
+↓
+Outcome determined by accumulated simulation state
+```
+
+The exact sequence should NOT be scripted if the systems can produce it dynamically.
+
+---
+
+# 56. EMERGENT OUTCOMES
+
+The game should allow situations such as:
+
+### Example A
+
+Malvr kills an NPC.
+
+A witness sees someone nearby.
+
+The witness tells a friend.
+
+The friend tells another NPC.
+
+The rumor becomes distorted.
+
+Police investigate the wrong person.
+
+Lumiel notices an inconsistency.
+
+Lumiel investigates the witness.
+
+Malvr realizes the investigation is moving toward him.
+
+Malvr changes strategy.
+
+---
+
+### Example B
+
+Lumiel suspects NPC A.
+
+NPC A is innocent.
+
+Malvr deliberately manipulates evidence.
+
+Police begin distrusting Lumiel.
+
+Lumiel must prove the hypothesis.
+
+---
+
+### Example C
+
+Malvr manipulates a police officer.
+
+The officer begins believing Malvr's narrative.
+
+Another officer distrusts that officer.
+
+The police department becomes internally divided.
+
+Lumiel must determine which information is reliable.
+
+---
+
+### Example D
+
+A witness remembers something incorrectly.
+
+The witness genuinely believes their memory.
+
+Lumiel treats the testimony as true.
+
+Later evidence contradicts it.
+
+The investigation must adapt.
+
+---
+
+# 57. NO SCRIPTED "CORRECT ANSWER"
+
+Do not create:
+
+```text
+NPC X = always murderer
+Clue Y = always correct answer
+Dialogue Z = always wins
+```
+
+Instead:
+
+```text
+World State
++
+Player Actions
++
+NPC Decisions
++
+Evidence
++
+Relationships
++
+Time
++
+AI
+=
+Outcome
+```
+
+---
+
+# 58. CONSEQUENCE SYSTEM
+
+Every major action should potentially have:
+
+### Immediate Consequence
+
+What happens now?
+
+### Short-Term Consequence
+
+What happens over the next hours/days?
+
+### Long-Term Consequence
+
+What changes in the world?
+
+Example:
+
+```text
+Player lies to NPC
+↓
+NPC distrust increases
+↓
+NPC tells friend
+↓
+Friend becomes suspicious
+↓
+Rumor spreads
+↓
+Police hear rumor
+↓
+Investigation changes
+```
+
+---
+
+# 59. ADAPTIVE WORLD
+
+The world should react to repeated player behavior.
+
+If Malvr repeatedly uses a particular strategy:
+
+NPCs and investigators may eventually recognize patterns.
+
+If Lumiel repeatedly accuses innocent people:
+
+Police trust can decrease.
+
+If Malvr becomes careless:
+
+Investigation pressure increases.
+
+If Malvr becomes extremely cautious:
+
+Investigation may become slower but not necessarily impossible.
+
+---
+
+# 60. PLAYER FREEDOM
+
+The player should be able to:
+
+* talk;
+* lie;
+* investigate;
+* manipulate;
+* observe;
+* accuse;
+* cooperate;
+* betray;
+* gather information;
+* create narratives;
+* exploit relationships;
+* investigate evidence;
+* confront suspects;
+* change plans.
+
+The system should respond to what the player actually does.
+
+---
+
+# 61. DATA-DRIVEN DESIGN
+
+Whenever possible, make game content data-driven.
+
+Avoid hardcoding every NPC.
+
+Example:
+
+```text
+NPCDefinition
+PersonalityDefinition
+OccupationDefinition
+RelationshipDefinition
+EvidenceDefinition
+CrimeDefinition
+LocationDefinition
+ScheduleDefinition
+DialogueContext
+DifficultyDefinition
+```
+
+This will allow the game to scale.
+
+---
+
+# 62. MODULAR CODE ARCHITECTURE
+
+Do NOT create one enormous:
+
+```text
+GameManager.cs
+```
+
+containing the entire game.
+
+Separate systems logically.
+
+Suggested structure:
+
+```text
+Core/
+    GameState
+    EventSystem
+    TimeSystem
+    SaveSystem
+
+World/
+    WorldSimulation
+    LocationSystem
+    ScheduleSystem
+    EventSystem
+
+Characters/
+    Character
+    NPC
+    Player
+    Police
+    Malvr
+    Lumiel
+
+Cognition/
+    MemorySystem
+    BeliefSystem
+    KnowledgeSystem
+    EmotionSystem
+    GoalSystem
+
+Social/
+    TrustSystem
+    RelationshipSystem
+    RumorSystem
+    InfluenceSystem
+
+Crime/
+    CrimeSystem
+    CrimeScene
+    EvidenceSystem
+    WitnessSystem
+    TimelineSystem
+
+Investigation/
+    InvestigationSystem
+    HypothesisSystem
+    CCTVSystem
+    InterviewSystem
+    InterrogationSystem
+
+AI/
+    AIOrchestrator
+    ContextEngine
+    DecisionEngine
+    AIProvider
+    AIValidator
+    DifficultySystem
+
+UI/
+    Dialogue
+    Evidence
+    Map
+    Journal
+    Timeline
+    Hypothesis
+    Relationship
+```
+
+Adapt the naming to the chosen engine/language.
+
+---
+
+# 63. TESTING
+
+Create automated tests for:
+
+```text
+Memory
+Belief Updates
+Trust
+Suspicion
+Relationships
+Knowledge Boundaries
+Evidence
+Crime Scenes
+Timeline
+Hidden Identity
+Rumor Propagation
+AI Validation
+Save / Load
+Difficulty
+NPC Decisions
+```
+
+Examples:
+
+```text
+NPC cannot know information they never received.
+
+False evidence should not become automatically true.
+
+NPC beliefs should update when evidence contradicts them.
+
+Trust should affect dialogue behavior.
+
+Hidden identities should remain hidden.
+
+Save/load should preserve the exact simulation state.
+
+AI should not perform impossible actions.
+
+AI difficulty should affect cognition rather than health values.
+```
+
+---
+
+# 64. PERFORMANCE
+
+Do not make every NPC perform expensive reasoning constantly.
+
+Use:
+
+```text
+Deterministic Simulation
++
+Utility AI / Behavior Systems
++
+Event-Based Reasoning
++
+Selective LLM Reasoning
+```
+
+LLMs should be used where they provide meaningful value.
+
+Not every NPC needs an LLM call every second.
+
+---
+
+# 65. AI COST MANAGEMENT
+
+Implement:
+
+* context compression;
+* memory retrieval;
+* relevance filtering;
+* caching;
+* event-based calls;
+* model selection;
+* local/mock fallback;
+* structured output.
+
+Important NPCs can receive deeper reasoning.
+
+Background NPCs can use lightweight simulation.
+
+---
+
+# 66. SECURITY
+
+Never place API keys directly inside source code.
+
+Use:
+
+```text
+Environment Variables
+Configuration
+Secure Runtime Settings
+```
+
+Never commit:
+
+```text
+API Keys
+Tokens
+Secrets
+Private Credentials
+```
+
+to GitHub.
+
+---
+
+# 67. DEVELOPMENT PHASES
+
+Implement in phases.
+
+## PHASE 1 — PROJECT FOUNDATION
+
+Build:
+
+* project structure;
+* GameState;
+* TimeSystem;
+* EventSystem;
+* SaveSystem;
+* basic world state;
+* basic NPC data.
+
+---
+
+## PHASE 2 — CHARACTER SYSTEM
+
+Implement:
+
+* NPC generation;
+* personality;
+* goals;
+* schedules;
+* locations;
+* relationships.
+
+---
+
+## PHASE 3 — SOCIAL SYSTEM
+
+Implement:
+
+* Trust;
+* Suspicion;
+* Fear;
+* Respect;
+* Loyalty;
+* Influence;
+* Relationship graph.
+
+---
+
+## PHASE 4 — MEMORY & BELIEF
+
+Implement:
+
+* Memory;
+* Knowledge;
+* Beliefs;
+* confidence;
+* information reliability;
+* rumor propagation.
+
+---
+
+## PHASE 5 — WORLD SIMULATION
+
+Implement:
+
+* schedules;
+* NPC movement;
+* events;
+* social interactions;
+* world time;
+* background simulation.
+
+---
+
+## PHASE 6 — AI DIALOGUE
+
+Implement:
+
+* free-text dialogue;
+* context engine;
+* memory retrieval;
+* belief retrieval;
+* AI provider;
+* structured output;
+* validation.
+
+---
+
+## PHASE 7 — CRIME SYSTEM
+
+Implement:
+
+* murder events;
+* victims;
+* crime scenes;
+* evidence;
+* witnesses;
+* timelines;
+* investigation consequences.
+
+---
+
+## PHASE 8 — INVESTIGATION
+
+Implement:
+
+* CCTV;
+* transactions;
+* evidence examination;
+* witness interviews;
+* interrogation;
+* hypotheses;
+* timeline reconstruction.
+
+---
+
+## PHASE 9 — POLICE AI
+
+Implement:
+
+* police personalities;
+* police memory;
+* police beliefs;
+* police trust;
+* police investigation;
+* independent police decisions.
+
+---
+
+## PHASE 10 — MALVR / LUMIEL
+
+Implement:
+
+* hidden identities;
+* Malvr campaign;
+* Lumiel campaign;
+* strategic AI;
+* campaign objectives;
+* opponent behavior.
+
+---
+
+## PHASE 11 — UI / UX
+
+Implement the interfaces based on:
+
+`Desain UIUX.png`
+
+---
+
+## PHASE 12 — VERTICAL SLICE
+
+Combine everything into the first complete playable slice.
+
+---
+
+# 68. DEVELOPMENT RULE
+
+Do not attempt to generate the entire game in one massive implementation.
+
+Work incrementally.
+
+For every phase:
+
+1. Explain architecture.
+2. Implement the system.
+3. Compile/build.
+4. Run tests.
+5. Fix errors.
+6. Verify integration.
+7. Document important decisions.
+8. Move to the next phase only after the current system is stable.
+
+---
+
+# 69. CODE QUALITY
+
+Prefer:
+
+* modularity;
+* readable code;
+* strong typing where applicable;
+* clear interfaces;
+* dependency injection where useful;
+* data-driven systems;
+* testability;
+* deterministic simulation;
+* extensibility.
+
+Avoid:
+
+* giant classes;
+* duplicated logic;
+* hidden global state;
+* hardcoded NPC behavior;
+* hardcoded identities;
+* unnecessary dependencies;
+* excessive LLM calls.
+
+---
+
+# 70. IMPORTANT AI RULE
+
+The LLM is NOT the game engine.
+
+The LLM is a reasoning component.
+
+The authoritative game state belongs to the game engine.
+
+Correct architecture:
+
+```text
+GAME STATE
+    ↓
+CONTEXT ENGINE
+    ↓
+AI
+    ↓
+STRUCTURED DECISION
+    ↓
+VALIDATOR
+    ↓
+GAME ENGINE
+    ↓
+STATE UPDATE
+```
+
+Never:
+
+```text
+LLM
+ ↓
+Directly modify everything
+```
+
+---
+
+# 71. DESIGN PRINCIPLE
+
+The most important principle of Bad Deduction is:
+
+> **The player should never be completely certain whether their interpretation of the world is correct.**
+
+The player can believe something.
+
+NPCs can believe something.
+
+Police can believe something.
+
+Malvr can believe something.
+
+Lumiel can believe something.
+
+But only the simulation knows the actual truth.
+
+This creates the psychological tension of the game.
+
+---
+
+# 72. FINAL DESIGN TARGET
+
+Bad Deduction should feel like:
+
+> A living psychological crime simulation where every character has their own mind, memory, beliefs, relationships, secrets, motivations, and limited understanding of reality.
+
+The player should be able to create stories that were never explicitly scripted.
+
+A murder should not simply trigger:
+
+```text
+Quest Started: Find Murderer
+```
+
+It should trigger a chain of systemic reactions:
+
+```text
+Murder
+↓
+Discovery
+↓
+Crime Scene
+↓
+Witness Memory
+↓
+Evidence
+↓
+Rumors
+↓
+Fear
+↓
+Social Changes
+↓
+Police Investigation
+↓
+Competing Beliefs
+↓
+False Leads
+↓
+New Evidence
+↓
+Counter-Manipulation
+↓
+Strategic Decisions
+↓
+Consequences
+```
+
+---
+
+# 73. FIRST ACTION
+
+Before making major architectural changes:
+
+### STEP 1
+
+Inspect the GitHub repository.
+
+### STEP 2
+
+Analyze every existing design asset.
+
+### STEP 3
+
+Produce:
+
+```text
+A. Repository Audit
+B. Existing Architecture
+C. Missing Systems
+D. Technical Risks
+E. Recommended Architecture
+F. Engine / Technology Recommendation
+G. Development Roadmap
+H. Vertical Slice Plan
+```
+
+### STEP 4
+
+Do NOT immediately build the entire game.
+
+First explain your findings.
+
+Then begin implementation with **Phase 1 — Project Foundation**.
+
+---
+
+# 74. FINAL REQUIREMENT
+
+Do not simplify Bad Deduction into a generic detective game.
+
+Do not remove:
+
+* murder;
+* crime;
+* deception;
+* manipulation;
+* psychological pressure;
+* evidence;
+* false evidence;
+* interrogation;
+* police investigation;
+* hidden identities;
+* memory;
+* beliefs;
+* social relationships;
+* free-text dialogue;
+* adaptive AI;
+* emergent consequences.
+
+These are fundamental to the identity of the game.
+
+Build the systems so that they interact naturally and produce emergent gameplay.
+
+**The goal is not to create a game that simulates a predetermined murder mystery.**
+
+**The goal is to create a simulation capable of generating murder mysteries, investigations, deception, social conflicts, and psychological battles dynamically.**

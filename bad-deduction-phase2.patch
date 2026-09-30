@@ -1,0 +1,1894 @@
+From 5f6c009c026194cc863dc4a18d08babead7e88c4 Mon Sep 17 00:00:00 2001
+From: Claude <claude@example.com>
+Date: Wed, 30 Sep 2026 04:20:05 +0000
+Subject: [PATCH] Phase 2: seeded cast, households, personality, goals,
+ secrets, relationships, schedules (74 tests)
+
+---
+ bad-deduction-phase1/README.md                |  16 +-
+ bad-deduction-phase1/data/goals.json          |  20 +
+ bad-deduction-phase1/data/names.json          |   5 +
+ bad-deduction-phase1/data/occupations.json    |  24 +
+ .../docs/00-repository-audit.md               |   2 +-
+ bad-deduction-phase1/docs/decisions.md        |  45 ++
+ .../Characters/CastGenerator.cs               | 453 ++++++++++++++++++
+ .../Characters/CharacterProfile.cs            |  43 ++
+ .../BadDeduction.Core/Content/CastContent.cs  |  54 +++
+ .../Content/ContentDatabase.cs                | 109 ++++-
+ .../src/BadDeduction.Core/Core/GameSession.cs |   8 +
+ .../Core/GameStateValidator.cs                |  53 ++
+ .../src/BadDeduction.Core/Core/SaveSystem.cs  |  14 +-
+ .../BadDeduction.Core/Social/Relationship.cs  |  15 +
+ .../Social/RelationshipGraph.cs               |  54 +++
+ .../src/BadDeduction.Core/World/Schedule.cs   |  29 ++
+ .../BadDeduction.Core/World/ScheduleSystem.cs |  81 ++++
+ .../src/BadDeduction.Core/World/WorldState.cs |   6 +
+ .../tests/BadDeduction.Tests/CastTests.cs     | 198 ++++++++
+ .../tests/BadDeduction.Tests/ContentTests.cs  |  48 ++
+ .../BadDeduction.Tests/RelationshipTests.cs   |  98 ++++
+ .../tests/BadDeduction.Tests/SaveTests.cs     |  47 ++
+ .../tests/BadDeduction.Tests/ScheduleTests.cs | 140 ++++++
+ .../tests/BadDeduction.Tests/TestSupport.cs   |  11 +
+ 24 files changed, 1561 insertions(+), 12 deletions(-)
+ create mode 100644 bad-deduction-phase1/data/goals.json
+ create mode 100644 bad-deduction-phase1/data/names.json
+ create mode 100644 bad-deduction-phase1/data/occupations.json
+ create mode 100644 bad-deduction-phase1/src/BadDeduction.Core/Characters/CastGenerator.cs
+ create mode 100644 bad-deduction-phase1/src/BadDeduction.Core/Characters/CharacterProfile.cs
+ create mode 100644 bad-deduction-phase1/src/BadDeduction.Core/Content/CastContent.cs
+ create mode 100644 bad-deduction-phase1/src/BadDeduction.Core/Social/Relationship.cs
+ create mode 100644 bad-deduction-phase1/src/BadDeduction.Core/Social/RelationshipGraph.cs
+ create mode 100644 bad-deduction-phase1/src/BadDeduction.Core/World/Schedule.cs
+ create mode 100644 bad-deduction-phase1/src/BadDeduction.Core/World/ScheduleSystem.cs
+ create mode 100644 bad-deduction-phase1/tests/BadDeduction.Tests/CastTests.cs
+ create mode 100644 bad-deduction-phase1/tests/BadDeduction.Tests/RelationshipTests.cs
+ create mode 100644 bad-deduction-phase1/tests/BadDeduction.Tests/ScheduleTests.cs
+
+diff --git a/bad-deduction-phase1/README.md b/bad-deduction-phase1/README.md
+index 320b06c..44ea6d8 100644
+--- a/bad-deduction-phase1/README.md
++++ b/bad-deduction-phase1/README.md
+@@ -11,17 +11,22 @@ that emerge from the simulation instead of a scripted solution.
+ 
+ ## Status
+ 
+-**Phase 1 (Foundation) complete.** Deterministic RNG, game time, event bus + causal world-event log,
+-versioned save/load with state hashing, location content, basic character/world state, and the
+-truth-vs-player-view separation. 41 tests. No presentation layer yet (Phase 11).
++**Phases 1-2 complete.**
++* Phase 1 (Foundation): deterministic RNG, game time, event bus + causal world-event log, versioned
++  save/load with state hashing, location content, truth-vs-player-view separation.
++* Phase 2 (Characters): seeded cast generation (`session.Cast.Generate(new CastSpec())` → 17 civilians
++  + 5 police), households, personality, secrets, relationship graph, goals, and daily/day-off schedules
++  with travel-feasibility checks. Save format v2.
++
++74 tests. No presentation layer yet (Phase 11).
+ 
+ ## Layout
+ 
+ ```
+ src/BadDeduction.Core/     engine-free simulation library (net8.0)
+-  Core/  World/  Characters/  Content/
++  Core/  World/  Characters/  Social/  Content/
+ tests/BadDeduction.Tests/  dependency-free test runner
+-data/                      data-driven content (locations.json)
++data/                      data-driven content (locations, occupations, goals, secrets, names)
+ docs/                      audit, roadmap, decisions
+ ```
+ 
+@@ -37,6 +42,7 @@ dotnet run --project tests/BadDeduction.Tests -- Save    # only tests whose name
+ 
+ ## Rules for contributors
+ 
++* Cast generation uses one named RNG stream per stage (`cast.people`, `cast.social`, ...); never draw from the sim RNG.
+ * Simulation code must be deterministic: use `DeterministicRandom`, never `System.Random`,
+   `DateTime.Now` or `Guid.NewGuid()`.
+ * Trust/suspicion/confidence are integers.
+diff --git a/bad-deduction-phase1/data/goals.json b/bad-deduction-phase1/data/goals.json
+new file mode 100644
+index 0000000..d463a37
+--- /dev/null
++++ b/bad-deduction-phase1/data/goals.json
+@@ -0,0 +1,20 @@
++{
++  // requires: every listed tag must hold for the character.
++  //   family/friend/secret = has at least one; police/civilian = character kind.
++  // targetFrom: which relationship a goal is aimed at (family or friend); omitted = no target.
++  "goals": [
++    { "id": "protect_family",       "label": "Protect my family",            "slot": "Primary",   "weight": 4, "requires": ["family"],   "targetFrom": "Family" },
++    { "id": "keep_job",             "label": "Keep my job",                  "slot": "Primary",   "weight": 4, "requires": ["civilian"] },
++    { "id": "protect_reputation",   "label": "Protect my reputation",        "slot": "Primary",   "weight": 3, "requires": ["civilian"] },
++    { "id": "hide_secret",          "label": "Keep my secret hidden",        "slot": "Primary",   "weight": 6, "requires": ["secret"] },
++    { "id": "uphold_law",           "label": "Uphold the law",               "slot": "Primary",   "weight": 6, "requires": ["police"] },
++    { "id": "find_truth",           "label": "Find out what really happened","slot": "Primary",   "weight": 1, "requires": [] },
++
++    { "id": "maintain_friendship",  "label": "Stay close to a friend",       "slot": "Secondary", "weight": 4, "requires": ["friend"],   "targetFrom": "Friend" },
++    { "id": "visit_family",         "label": "Spend time with family",       "slot": "Secondary", "weight": 3, "requires": ["family"],   "targetFrom": "Family" },
++    { "id": "avoid_police",         "label": "Stay out of the guards' sight","slot": "Secondary", "weight": 5, "requires": ["secret", "civilian"] },
++    { "id": "earn_money",           "label": "Earn more money",              "slot": "Secondary", "weight": 3, "requires": [] },
++    { "id": "avoid_conflict",       "label": "Avoid trouble",                "slot": "Secondary", "weight": 3, "requires": [] },
++    { "id": "discover_truth",       "label": "Learn what others are hiding", "slot": "Secondary", "weight": 2, "requires": [] }
++  ]
++}
+diff --git a/bad-deduction-phase1/data/names.json b/bad-deduction-phase1/data/names.json
+new file mode 100644
+index 0000000..96ffbe0
+--- /dev/null
++++ b/bad-deduction-phase1/data/names.json
+@@ -0,0 +1,5 @@
++{
++  // Era-neutral placeholder names. Replace once the setting skin is decided.
++  "given": ["Adrian","Beatrix","Cormac","Delia","Emeric","Fenna","Gideon","Helena","Ivo","Junia","Konrad","Lyra","Marek","Nadia","Osric","Petra","Quentin","Rosalind","Silas","Thea","Ulric","Vera","Wendel","Xenia","Yorick","Zora","Alden","Brenna","Caspian","Dorian","Elowen","Felix","Greta","Hugo","Isolde","Jasper","Katya","Leopold","Mirela","Nikolai"],
++  "surnames": ["Ashdown","Blackwood","Carrow","Dunmore","Ellery","Fairbanks","Grayle","Hollis","Ironside","Jessop","Kestrel","Lockhart","Marlowe","Northcott","Ormond","Pemberton","Quill","Ravenscroft","Sterne","Thorne","Underhill","Vance","Whitlock","Yarrow","Ashcombe","Brandt","Corwin","Devlin","Everard","Holloway"]
++}
+diff --git a/bad-deduction-phase1/data/occupations.json b/bad-deduction-phase1/data/occupations.json
+new file mode 100644
+index 0000000..f59b84f
+--- /dev/null
++++ b/bad-deduction-phase1/data/occupations.json
+@@ -0,0 +1,24 @@
++{
++  // Provisional occupations mapped onto the locations of "Desain mapkota.png".
++  // shiftEndHour must be <= 23 so every character can be home and asleep across midnight.
++  // Police occupations have hasDayOff=false: the 7-day slice always has the station staffed.
++  "occupations": [
++    { "id": "merchant",         "name": "Merchant",         "kind": "Civilian", "workLocationId": "loc_central_market", "shiftStartHour": 8,  "shiftEndHour": 17, "minAge": 22, "maxAge": 65, "weight": 3, "maxCount": 3 },
++    { "id": "shopkeeper",       "name": "Shopkeeper",       "kind": "Civilian", "workLocationId": "loc_central_market", "shiftStartHour": 9,  "shiftEndHour": 18, "minAge": 20, "maxAge": 65, "weight": 2, "maxCount": 2 },
++    { "id": "innkeeper",        "name": "Innkeeper",        "kind": "Civilian", "workLocationId": "loc_tavern",         "shiftStartHour": 15, "shiftEndHour": 23, "minAge": 28, "maxAge": 65, "weight": 1, "maxCount": 1 },
++    { "id": "barkeep",          "name": "Barkeep",          "kind": "Civilian", "workLocationId": "loc_tavern",         "shiftStartHour": 16, "shiftEndHour": 23, "minAge": 20, "maxAge": 50, "weight": 2, "maxCount": 2 },
++    { "id": "priest",           "name": "Priest",           "kind": "Civilian", "workLocationId": "loc_church",         "shiftStartHour": 7,  "shiftEndHour": 15, "minAge": 30, "maxAge": 75, "weight": 1, "maxCount": 1 },
++    { "id": "healer",           "name": "Healer",           "kind": "Civilian", "workLocationId": "loc_church",         "shiftStartHour": 9,  "shiftEndHour": 17, "minAge": 26, "maxAge": 65, "weight": 1, "maxCount": 1 },
++    { "id": "clerk",            "name": "Clerk",            "kind": "Civilian", "workLocationId": "loc_city_hall",      "shiftStartHour": 8,  "shiftEndHour": 16, "minAge": 20, "maxAge": 55, "weight": 3, "maxCount": 3 },
++    { "id": "official",         "name": "Official",         "kind": "Civilian", "workLocationId": "loc_city_hall",      "shiftStartHour": 9,  "shiftEndHour": 17, "minAge": 35, "maxAge": 65, "weight": 1, "maxCount": 1 },
++    { "id": "archivist",        "name": "Archivist",        "kind": "Civilian", "workLocationId": "loc_city_hall",      "shiftStartHour": 9,  "shiftEndHour": 17, "minAge": 24, "maxAge": 65, "weight": 1, "maxCount": 1 },
++    { "id": "warehouse_worker", "name": "Warehouse Worker", "kind": "Civilian", "workLocationId": "loc_warehouse",      "shiftStartHour": 7,  "shiftEndHour": 15, "minAge": 20, "maxAge": 55, "weight": 3, "maxCount": 3 },
++    { "id": "gravekeeper",      "name": "Gravekeeper",      "kind": "Civilian", "workLocationId": "loc_cemetery",       "shiftStartHour": 7,  "shiftEndHour": 15, "minAge": 30, "maxAge": 70, "weight": 1, "maxCount": 1 },
++    { "id": "forester",         "name": "Forester",         "kind": "Civilian", "workLocationId": "loc_forest",         "shiftStartHour": 6,  "shiftEndHour": 14, "minAge": 22, "maxAge": 60, "weight": 1, "maxCount": 1 },
++    { "id": "dockworker",       "name": "Dockworker",       "kind": "Civilian", "workLocationId": "loc_harbor",         "shiftStartHour": 7,  "shiftEndHour": 15, "minAge": 20, "maxAge": 55, "weight": 2, "maxCount": 3 },
++
++    { "id": "guard_captain", "name": "Guard Captain", "kind": "Police", "workLocationId": "loc_guard_station", "shiftStartHour": 8,  "shiftEndHour": 18, "minAge": 35, "maxAge": 60, "weight": 1, "minCount": 1, "maxCount": 1, "hasDayOff": false },
++    { "id": "guard_day",     "name": "Guard (Day)",   "kind": "Police", "workLocationId": "loc_guard_station", "shiftStartHour": 7,  "shiftEndHour": 15, "minAge": 21, "maxAge": 55, "weight": 1, "maxCount": 3, "hasDayOff": false },
++    { "id": "guard_night",   "name": "Guard (Night)", "kind": "Police", "workLocationId": "loc_guard_station", "shiftStartHour": 15, "shiftEndHour": 23, "minAge": 21, "maxAge": 55, "weight": 1, "maxCount": 3, "hasDayOff": false }
++  ]
++}
+diff --git a/bad-deduction-phase1/docs/00-repository-audit.md b/bad-deduction-phase1/docs/00-repository-audit.md
+index 6691974..16f5109 100644
+--- a/bad-deduction-phase1/docs/00-repository-audit.md
++++ b/bad-deduction-phase1/docs/00-repository-audit.md
+@@ -154,7 +154,7 @@ LLM access: `IAIProvider` abstraction with `MockAIProvider` first; keys from env
+ | Phase | Deliverable | Exit criteria |
+ |---|---|---|
+ | **1 Foundation** ✅ | State, time, events, save/load, RNG, basic world/NPC data, hidden-identity separation | 41 tests; save→load→continue hash-identical to uninterrupted run |
+-| 2 Characters | Seeded NPC generation, personality, goals, schedules | Same seed ⇒ same cast; different seeds ⇒ different social worlds |
++| 2 Characters ✅ | Seeded NPC generation, personality, goals, schedules, relationships (tags) | Same seed ⇒ same cast; different seeds ⇒ different social worlds |
+ | 3 Social | Trust/suspicion/fear/respect/loyalty/influence, relationship graph | Trust alone never forces an action (tested) |
+ | 4 Memory & belief | Memory decay/distortion, 5-layer knowledge, beliefs, rumors | NPC cannot know what it never received (tested) |
+ | 5 World simulation | Schedules, movement, tiered simulation | A 7-day run with no player produces plausible, varied routines |
+diff --git a/bad-deduction-phase1/docs/decisions.md b/bad-deduction-phase1/docs/decisions.md
+index ecccd32..4ba34ef 100644
+--- a/bad-deduction-phase1/docs/decisions.md
++++ b/bad-deduction-phase1/docs/decisions.md
+@@ -63,3 +63,48 @@ made a test fail.
+ * No `DateTime.Now`, `Guid.NewGuid()`, or `System.Random` inside simulation code.
+ * New persisted fields ⇒ bump `SaveSystem.CurrentFormatVersion` and add a migration.
+ * Never let LLM output touch `GameState`; it goes through the validator.
++
++---
++
++## Phase 2 — Characters: what exists and why
++
++```
++CastGenerator (session.Cast) ── one named RNG stream per stage; sim RNG untouched
++  people → names → personality/secrets → relationships → goals → schedules → place at schedule
++WorldState  +Profiles (personality, goals, secrets, household)  +Schedules  +Relationships
++ScheduleSystem  BlockAt / PlaceAtScheduledPositions / Check     RelationshipGraph  Connect / Components
++ContentDatabase +Occupations +Goals +Secrets +Names +TravelMinutes (shortest path)
++```
++
++## ADR-007 — Cast generation has its own RNG streams, and ids are shuffled
++`cast.people`, `cast.names`, `cast.personality`, `cast.secrets`, `cast.social`, `cast.goals`,
++`cast.schedules` are derived from the RunSeed (ADR-002), so tuning one stage never reshuffles another and
++generating a cast leaves `SimRng` untouched. Character ids (`c_01`..) are assigned after a shuffle: an id
++reveals nothing about occupation, household or (later) hidden role.
++
++## ADR-008 — Schedules are arrival deadlines; travel happens at the tail of a block
++A block `[Start, End)` says where a character is; `Start` is when they must have *arrived*. Leaving
++happens `TravelMinutes(here, next)` before the next block starts. `ScheduleSystem.Check` enforces: blocks
++tile 0..1440, locations exist, each block is long enough to travel onward, and the day loops (starts and
++ends at home). A separate `DayOff` list applies when `(day-1) % 7 == DayOffIndex`; police have no day off
++so the station is always staffed in the 7-day slice. Phase 5 turns blocks into movement.
++
++## ADR-009 — Relationships: directed pair of edges + a category tag; numbers come in Phase 3
++Every relationship is two directed edges (A→B, B→A) so each side can diverge later. `RelationshipKind`
++(Family, Friend, Colleague, Rival, Acquaintance) drives the graph view and goal targets. The trust /
++fear / respect / loyalty / suspicion / influence / affection / resentment axes are Phase 3 (save v3).
++The generator guarantees one connected component, so rumors can eventually reach everyone.
++
++## ADR-010 — Household-first generation; the cast pool is 17 civilians + 5 police
++People are generated in households (single, spouses, siblings, parent/child) so ages, homes and
++surnames stay consistent; occupations are then drawn against age ranges and `MaxCount`. `MinCount`
++guarantees required roles (exactly one guard captain). The audit's slice is "15 NPCs + Malvr + Lumiel",
++so Phase 10 will pick both geniuses *from the 17 civilians*; no role or player edges exist yet.
++
++## Save format v2
++Adds `World.Profiles`, `World.Schedules`, `World.Relationships`. Migration v1→v2 adds the empty containers.
++Content cross-checks (known goal/secret ids, schedule feasibility) run in `GameSession.FromState`.
++
++## Defaults used for the open questions in the audit (section H)
++Engine choice, setting skin, slice incident, portraits and LLM hosting were not answered, and none of
++them affects Phase 2. Names/occupations are era-neutral placeholders; swap the JSON when the skin is decided.
+diff --git a/bad-deduction-phase1/src/BadDeduction.Core/Characters/CastGenerator.cs b/bad-deduction-phase1/src/BadDeduction.Core/Characters/CastGenerator.cs
+new file mode 100644
+index 0000000..3cfef7f
+--- /dev/null
++++ b/bad-deduction-phase1/src/BadDeduction.Core/Characters/CastGenerator.cs
+@@ -0,0 +1,453 @@
++using BadDeduction.Content;
++using BadDeduction.Core;
++using BadDeduction.Social;
++using BadDeduction.World;
++
++namespace BadDeduction.Characters;
++
++public sealed class CastSpec
++{
++    /// <summary>Phase 10 picks the two hidden geniuses from this pool, so the slice's "15 NPCs + Malvr + Lumiel" is 17 civilians.</summary>
++    public int Civilians { get; set; } = 17;
++    public int Police { get; set; } = 5;
++    public string HomeLocationId { get; set; } = "loc_residential";
++
++    /// <summary>Chance that a person shares a household with one more person.</summary>
++    public double HouseholdChance { get; set; } = 0.45;
++
++    /// <summary>Locations outside the vertical slice: no jobs or leisure there (see audit C-6).</summary>
++    public HashSet<string> ExcludedLocationIds { get; set; } = new() { "loc_harbor", "loc_underground" };
++}
++
++/// <summary>
++/// Phase 2: builds the run's cast (people, households, personalities, secrets, relationships, goals,
++/// schedules) from the RunSeed. Each stage uses its own named RNG stream, so changing one stage never
++/// shifts another, and the simulation RNG is never consumed. Character ids are shuffled, so an id
++/// says nothing about role or occupation. No hidden role is assigned here (Phase 10).
++/// </summary>
++public sealed class CastGenerator
++{
++    private enum Shape { Single, Spouses, Siblings, ParentChild }
++
++    private sealed class Draft
++    {
++        public CharacterKind Kind;
++        public int Age;
++        public OccupationDefinition Occupation = null!;
++        public int Household;
++        public string Id = "";
++        public string Name = "";
++    }
++
++    private readonly GameState _state;
++    private readonly ContentDatabase _content;
++    private readonly WorldService _world;
++    private readonly RelationshipGraph _graph;
++
++    public CastGenerator(GameState state, ContentDatabase content, WorldService world, RelationshipGraph graph)
++    {
++        _state = state;
++        _content = content;
++        _world = world;
++        _graph = graph;
++    }
++
++    public IReadOnlyList<string> Generate(CastSpec spec)
++    {
++        if (_state.World.Characters.Count > 0) throw new InvalidOperationException("The cast can only be generated into an empty world.");
++        if (!_content.HasLocation(spec.HomeLocationId)) throw new ArgumentException($"Unknown home location '{spec.HomeLocationId}'.", nameof(spec));
++        var seed = _state.Meta.RunSeed;
++
++        var drafts = DrawPeople(spec, DeterministicRandom.Derive(seed, "cast.people"));
++        AssignIdsAndNames(drafts, DeterministicRandom.Derive(seed, "cast.names"));
++
++        foreach (var d in drafts)
++            _world.AddCharacter(new CharacterState
++            {
++                Id = d.Id, DisplayName = d.Name, Age = d.Age, OccupationId = d.Occupation.Id, Kind = d.Kind,
++                HomeLocationId = spec.HomeLocationId, WorkLocationId = d.Occupation.WorkLocationId,
++                CurrentLocationId = spec.HomeLocationId,
++            });
++
++        var rngPersonality = DeterministicRandom.Derive(seed, "cast.personality");
++        var rngSecrets = DeterministicRandom.Derive(seed, "cast.secrets");
++        foreach (var d in drafts)
++        {
++            var profile = new CharacterProfile { Personality = DrawPersonality(rngPersonality), HouseholdId = $"h_{d.Household + 1:D2}" };
++            var secret = DrawSecret(rngSecrets, profile.Personality, d.Kind);
++            if (secret is not null) profile.SecretIds.Add(secret.Id);
++            _state.World.Profiles[d.Id] = profile;
++        }
++
++        BuildRelationships(drafts, DeterministicRandom.Derive(seed, "cast.social"));
++        AssignGoals(drafts, DeterministicRandom.Derive(seed, "cast.goals"));
++
++        var rngSchedule = DeterministicRandom.Derive(seed, "cast.schedules");
++        foreach (var d in drafts)
++            _state.World.Schedules[d.Id] = BuildSchedule(d, spec, rngSchedule);
++
++        new ScheduleSystem(_state, _content).PlaceAtScheduledPositions();
++        return drafts.Select(d => d.Id).ToList();
++    }
++
++    // ---------------------------------------------------------------- people
++
++    private List<Draft> DrawPeople(CastSpec spec, DeterministicRandom rng)
++    {
++        var occs = _content.Occupations.Where(o => !spec.ExcludedLocationIds.Contains(o.WorkLocationId)).ToList();
++        var used = new Dictionary<string, int>(StringComparer.Ordinal);
++        int civLeft = spec.Civilians, polLeft = spec.Police;
++        var drafts = new List<Draft>();
++        var household = 0;
++
++        CharacterKind TakeKind()
++        {
++            var kind = rng.NextInt(0, civLeft + polLeft) < polLeft ? CharacterKind.Police : CharacterKind.Civilian;
++            if (kind == CharacterKind.Police) polLeft--; else civLeft--;
++            return kind;
++        }
++
++        void Return(CharacterKind kind) { if (kind == CharacterKind.Police) polLeft++; else civLeft++; }
++
++        void Add(CharacterKind anchorKind, OccupationDefinition? forced)
++        {
++            CharacterKind? companion = null;
++            if (civLeft + polLeft > 0 && rng.Chance(spec.HouseholdChance)) companion = TakeKind();
++
++            var built = TryHousehold(rng, occs, used, anchorKind, forced, companion)
++                        ?? (companion is null ? null : TryHousehold(rng, occs, used, anchorKind, forced, null));
++            if (built is null)
++                throw new InvalidOperationException("Could not fill the cast from the available occupations; check occupation ages/counts.");
++            if (companion is not null && built.Count == 1) Return(companion.Value);
++
++            foreach (var d in built) { d.Household = household; drafts.Add(d); used[d.Occupation.Id] = used.GetValueOrDefault(d.Occupation.Id) + 1; }
++            household++;
++        }
++
++        foreach (var occ in occs.Where(o => o.MinCount > 0))
++            for (var i = 0; i < occ.MinCount; i++)
++            {
++                if (occ.Kind == CharacterKind.Police ? polLeft <= 0 : civLeft <= 0)
++                    throw new InvalidOperationException($"Cast size is too small for the required occupation '{occ.Id}'.");
++                if (occ.Kind == CharacterKind.Police) polLeft--; else civLeft--;
++                Add(occ.Kind, occ);
++            }
++
++        while (civLeft + polLeft > 0) Add(TakeKind(), null);
++        return drafts;
++    }
++
++    private static List<Draft>? TryHousehold(
++        DeterministicRandom rng, List<OccupationDefinition> occs, Dictionary<string, int> used,
++        CharacterKind anchorKind, OccupationDefinition? forced, CharacterKind? companionKind)
++    {
++        for (var attempt = 0; attempt < 80; attempt++)
++        {
++            var shape = companionKind is null ? Shape.Single : (Shape)rng.NextInt(1, 4);
++            var anchorAge = forced is not null ? rng.NextInt(forced.MinAge, forced.MaxAge + 1) : rng.NextInt(24, 63);
++            var companionAge = shape switch
++            {
++                Shape.Spouses => anchorAge + rng.NextInt(-6, 7),
++                Shape.Siblings => anchorAge + rng.NextInt(-8, 9),
++                Shape.ParentChild => rng.Chance(0.5) ? anchorAge - rng.NextInt(20, 36) : anchorAge + rng.NextInt(20, 36),
++                _ => 0,
++            };
++            if (shape != Shape.Single && companionAge is < 18 or > 75) continue;
++
++            var pending = new Dictionary<string, int>(used, StringComparer.Ordinal);
++            var anchorOcc = forced ?? PickOccupation(rng, occs, pending, anchorKind, anchorAge);
++            if (anchorOcc is null) continue;
++            pending[anchorOcc.Id] = pending.GetValueOrDefault(anchorOcc.Id) + 1;
++
++            var result = new List<Draft> { new() { Kind = anchorKind, Age = anchorAge, Occupation = anchorOcc } };
++            if (companionKind is { } ck)
++            {
++                var occ = PickOccupation(rng, occs, pending, ck, companionAge);
++                if (occ is null) continue;
++                result.Add(new Draft { Kind = ck, Age = companionAge, Occupation = occ });
++            }
++            return result;
++        }
++        return null;
++    }
++
++    private static OccupationDefinition? PickOccupation(
++        DeterministicRandom rng, List<OccupationDefinition> occs, Dictionary<string, int> used, CharacterKind kind, int age)
++    {
++        var options = occs.Where(o => o.Kind == kind && age >= o.MinAge && age <= o.MaxAge && used.GetValueOrDefault(o.Id) < o.MaxCount).ToList();
++        return options.Count == 0 ? null : WeightedPick(rng, options, o => o.Weight);
++    }
++
++    private void AssignIdsAndNames(List<Draft> drafts, DeterministicRandom rng)
++    {
++        // Shuffle so ids carry no information about generation order (captain, households, ...).
++        rng.Shuffle(drafts);
++        for (var i = 0; i < drafts.Count; i++) drafts[i].Id = $"c_{i + 1:D2}";
++
++        var given = _content.Names.Given.ToList();
++        var surnames = _content.Names.Surnames.ToList();
++        rng.Shuffle(given);
++        rng.Shuffle(surnames);
++
++        var householdCount = drafts.Max(d => d.Household) + 1;
++        if (given.Count < drafts.Count || surnames.Count < householdCount)
++            throw new InvalidOperationException("The name tables are too small for this cast size.");
++
++        var surnameOf = new Dictionary<int, string>();
++        for (var i = 0; i < drafts.Count; i++)
++        {
++            var d = drafts[i];
++            if (!surnameOf.TryGetValue(d.Household, out var surname)) surnameOf[d.Household] = surname = surnames[surnameOf.Count];
++            d.Name = $"{given[i]} {surname}";
++        }
++        drafts.Sort((a, b) => string.CompareOrdinal(a.Id, b.Id));
++    }
++
++    // ------------------------------------------------- personality and secrets
++
++    private static Personality DrawPersonality(DeterministicRandom rng)
++    {
++        // Mean of two uniform draws: traits cluster near the middle, extremes are rarer.
++        int Trait() => (rng.NextInt(0, 101) + rng.NextInt(0, 101)) / 2;
++        return new Personality
++        {
++            Extraversion = Trait(), Agreeableness = Trait(), Conscientiousness = Trait(),
++            Neuroticism = Trait(), Honesty = Trait(), Courage = Trait(),
++        };
++    }
++
++    private SecretDefinition? DrawSecret(DeterministicRandom rng, Personality p, CharacterKind kind)
++    {
++        if (_content.Secrets.Count == 0) return null;
++        var baseChance = kind == CharacterKind.Police ? 0.12 : 0.30;
++        var chance = Math.Clamp(baseChance * (1.0 + (50 - p.Honesty) / 100.0), 0.0, 0.9);
++        return rng.Chance(chance) ? WeightedPick(rng, _content.Secrets.ToList(), s => s.Weight) : null;
++    }
++
++    // ---------------------------------------------------------- relationships
++
++    private void BuildRelationships(List<Draft> drafts, DeterministicRandom rng)
++    {
++        // Family: everyone in a household.
++        foreach (var group in drafts.GroupBy(d => d.Household))
++        {
++            var members = group.ToList();
++            for (var i = 0; i < members.Count; i++)
++                for (var j = i + 1; j < members.Count; j++)
++                    _graph.Connect(members[i].Id, members[j].Id, RelationshipKind.Family);
++        }
++
++        // Colleagues: most pairs at the same workplace know each other.
++        foreach (var group in drafts.GroupBy(d => d.Occupation.WorkLocationId).OrderBy(g => g.Key, StringComparer.Ordinal))
++        {
++            var members = group.OrderBy(d => d.Id, StringComparer.Ordinal).ToList();
++            for (var i = 0; i < members.Count; i++)
++                for (var j = i + 1; j < members.Count; j++)
++                    if (rng.Chance(0.85)) _graph.Connect(members[i].Id, members[j].Id, RelationshipKind.Colleague);
++        }
++
++        // Friends: outgoing people make more friends; similar ages are likelier.
++        foreach (var d in drafts)
++        {
++            var p = _state.World.Profiles[d.Id].Personality;
++            var wanted = rng.NextInt(0, 1 + p.Extraversion / 34);
++            for (var k = 0; k < wanted && FriendCount(d.Id) < 4; k++)
++            {
++                var options = drafts.Where(o => o.Id != d.Id && _graph.Get(d.Id, o.Id) is null && FriendCount(o.Id) < 4).ToList();
++                if (options.Count == 0) break;
++                var friend = WeightedPick(rng, options, o => Math.Abs(o.Age - d.Age) <= 15 ? 3 : 1);
++                _graph.Connect(d.Id, friend.Id, RelationshipKind.Friend);
++            }
++        }
++
++        // Rivals: the least agreeable people pick a fight with someone they are not close to.
++        var rivalCount = Math.Max(1, drafts.Count / 8);
++        var prickly = drafts.OrderBy(d => _state.World.Profiles[d.Id].Personality.Agreeableness).ThenBy(d => d.Id, StringComparer.Ordinal).Take(rivalCount);
++        foreach (var d in prickly)
++        {
++            var options = drafts.Where(o => o.Id != d.Id && _graph.Get(d.Id, o.Id) is null).ToList();
++            if (options.Count > 0) _graph.Connect(d.Id, rng.Pick(options).Id, RelationshipKind.Rival);
++        }
++
++        // Guarantee one connected social network (information/rumors can reach everyone eventually).
++        while (true)
++        {
++            var comps = _graph.Components(drafts.Select(d => d.Id));
++            if (comps.Count <= 1) break;
++            var largest = comps.OrderByDescending(c => c.Count).ThenBy(c => c[0], StringComparer.Ordinal).First();
++            var other = comps.Where(c => c != largest).OrderBy(c => c[0], StringComparer.Ordinal).First();
++            _graph.Connect(rng.Pick(other), rng.Pick(largest), RelationshipKind.Acquaintance);
++        }
++    }
++
++    private int FriendCount(string id) => _graph.Of(id, RelationshipKind.Friend).Count();
++
++    // ------------------------------------------------------------------ goals
++
++    private void AssignGoals(List<Draft> drafts, DeterministicRandom rng)
++    {
++        foreach (var d in drafts)
++        {
++            var profile = _state.World.Profiles[d.Id];
++            var family = _graph.Of(d.Id, RelationshipKind.Family).OrderBy(x => x, StringComparer.Ordinal).ToList();
++            var friends = _graph.Of(d.Id, RelationshipKind.Friend).OrderBy(x => x, StringComparer.Ordinal).ToList();
++            var tags = new HashSet<string> { d.Kind == CharacterKind.Police ? "police" : "civilian" };
++            if (family.Count > 0) tags.Add("family");
++            if (friends.Count > 0) tags.Add("friend");
++            if (profile.SecretIds.Count > 0) tags.Add("secret");
++
++            bool Eligible(GoalDefinition g) => g.Requires.All(tags.Contains);
++
++            var primary = WeightedPick(rng, _content.Goals.Where(g => g.Slot == GoalSlot.Primary && Eligible(g)).ToList(), g => g.Weight);
++            profile.Goals.Add(MakeGoal(primary, rng, family, friends, profile, rng.NextInt(60, 91)));
++
++            var secondaryPool = _content.Goals.Where(g => g.Slot == GoalSlot.Secondary && Eligible(g)).ToList();
++            var secondaryCount = Math.Min(secondaryPool.Count, rng.NextInt(1, 3));
++            for (var i = 0; i < secondaryCount; i++)
++            {
++                var g = WeightedPick(rng, secondaryPool, x => x.Weight);
++                secondaryPool.Remove(g);
++                profile.Goals.Add(MakeGoal(g, rng, family, friends, profile, rng.NextInt(20, 56)));
++            }
++        }
++    }
++
++    private Goal MakeGoal(GoalDefinition def, DeterministicRandom rng, List<string> family, List<string> friends, CharacterProfile profile, int priority)
++    {
++        string? target = def.TargetFrom switch
++        {
++            GoalTargetSource.Family => rng.Pick(family),
++            GoalTargetSource.Friend => rng.Pick(friends),
++            _ => null,
++        };
++        if (def.Id == "hide_secret")
++        {
++            var severity = _content.Secrets.First(s => s.Id == profile.SecretIds[0]).Severity;
++            priority = Math.Min(100, priority + 5 * severity);
++        }
++        return new Goal { DefinitionId = def.Id, Slot = def.Slot, TargetId = target, Priority = priority };
++    }
++
++    // -------------------------------------------------------------- schedules
++
++    private const int LatestHomeArrival = 22 * 60 + 30;
++
++    private Schedule BuildSchedule(Draft d, CastSpec spec, DeterministicRandom rng)
++    {
++        var personality = _state.World.Profiles[d.Id].Personality;
++        var schedule = new Schedule
++        {
++            Workday = BuildWorkday(d.Occupation, spec, personality, rng),
++            DayOffIndex = d.Occupation.HasDayOff ? rng.NextInt(0, 7) : -1,
++        };
++        if (schedule.DayOffIndex >= 0) schedule.DayOff = BuildDayOff(spec, personality, rng);
++        return schedule;
++    }
++
++    private List<ScheduleBlock> BuildWorkday(OccupationDefinition occ, CastSpec spec, Personality p, DeterministicRandom rng)
++    {
++        var home = spec.HomeLocationId;
++        var work = occ.WorkLocationId;
++        int start = occ.ShiftStartHour * 60, end = occ.ShiftEndHour * 60;
++        var toWork = _content.TravelMinutes(home, work);
++        var wake = Math.Min(330 + (100 - p.Conscientiousness) * 60 / 100 + rng.NextInt(0, 30), start - toWork - 40);
++
++        var blocks = new List<ScheduleBlock>();
++        void Add(int from, int to, string loc, Activity a) => blocks.Add(new ScheduleBlock { StartMinute = from, EndMinute = to, LocationId = loc, Activity = a });
++
++        Add(0, wake, home, Activity.Sleeping);
++        Add(wake, start, home, Activity.Idle);
++
++        var arriveHome = 0;
++        var leisure = rng.Chance(0.35 + p.Extraversion / 200.0) ? PickLeisure(spec, p, rng, exclude: work) : null;
++        if (leisure is not null)
++        {
++            var arriveL = end + _content.TravelMinutes(work, leisure);
++            var stay = rng.NextInt(90, 181);
++            arriveHome = arriveL + stay + _content.TravelMinutes(leisure, home);
++            if (arriveHome > LatestHomeArrival) leisure = null;
++            else
++            {
++                Add(start, arriveL, work, Activity.Working);
++                Add(arriveL, arriveHome, leisure, Activity.Socializing);
++            }
++        }
++        if (leisure is null)
++        {
++            arriveHome = end + _content.TravelMinutes(work, home);
++            Add(start, arriveHome, work, Activity.Working);
++        }
++
++        var bed = Math.Max(arriveHome + 20, 21 * 60 + 30 + rng.NextInt(0, 60));
++        Add(arriveHome, bed, home, Activity.Idle);
++        Add(bed, GameTime.MinutesPerDay, home, Activity.Sleeping);
++        return blocks;
++    }
++
++    private List<ScheduleBlock> BuildDayOff(CastSpec spec, Personality p, DeterministicRandom rng)
++    {
++        var home = spec.HomeLocationId;
++        var blocks = new List<ScheduleBlock>();
++        void Add(int from, int to, string loc, Activity a) => blocks.Add(new ScheduleBlock { StartMinute = from, EndMinute = to, LocationId = loc, Activity = a });
++
++        var wake = 7 * 60 + rng.NextInt(0, 120);
++        Add(0, wake, home, Activity.Sleeping);
++
++        var cursor = wake;             // start of the current block at home
++        string? firstOuting = null;
++        for (var outing = 0; outing < 2; outing++)
++        {
++            var chance = outing == 0 ? 0.85 : 0.30 + p.Extraversion / 250.0;
++            if (!rng.Chance(chance)) continue;
++            var place = PickLeisure(spec, p, rng, exclude: firstOuting);
++            if (place is null) continue;
++
++            var leave = outing == 0 ? 10 * 60 + rng.NextInt(0, 120) : Math.Max(cursor + 60, 18 * 60 + rng.NextInt(0, 90));
++            var arrive = leave + _content.TravelMinutes(home, place);
++            var back = arrive + (outing == 0 ? rng.NextInt(90, 241) : rng.NextInt(90, 151)) + _content.TravelMinutes(place, home);
++            if (back > LatestHomeArrival || arrive <= cursor) continue;
++
++            Add(cursor, arrive, home, Activity.Idle);
++            Add(arrive, back, place, Activity.Socializing);
++            cursor = back;
++            firstOuting ??= place;
++        }
++
++        var bed = Math.Max(cursor + 20, 21 * 60 + 30 + rng.NextInt(0, 60));
++        Add(cursor, bed, home, Activity.Idle);
++        Add(bed, GameTime.MinutesPerDay, home, Activity.Sleeping);
++        return blocks;
++    }
++
++    /// <summary>Public, non-official places. Outgoing people favour social hubs; steady, kind people favour sanctuaries.</summary>
++    private string? PickLeisure(CastSpec spec, Personality p, DeterministicRandom rng, string? exclude)
++    {
++        var options = _content.Locations
++            .Where(l => l.Visibility == LocationVisibility.Public
++                        && !l.Tags.Contains("investigation")
++                        && !spec.ExcludedLocationIds.Contains(l.Id)
++                        && l.Id != spec.HomeLocationId
++                        && l.Id != exclude)
++            .ToList();
++        if (options.Count == 0) return null;
++        return WeightedPick(rng, options, l =>
++            1 + (l.Tags.Contains("social_hub") ? p.Extraversion / 20 : 0)
++              + (l.Tags.Contains("sanctuary") ? p.Conscientiousness / 25 + p.Agreeableness / 50 : 0)).Id;
++    }
++
++    // ---------------------------------------------------------------- helpers
++
++    private static T WeightedPick<T>(DeterministicRandom rng, IReadOnlyList<T> items, Func<T, int> weight)
++    {
++        if (items.Count == 0) throw new InvalidOperationException("Nothing to pick from.");
++        var total = 0;
++        foreach (var i in items) total += weight(i);
++        var roll = rng.NextInt(0, total);
++        foreach (var i in items)
++        {
++            roll -= weight(i);
++            if (roll < 0) return i;
++        }
++        return items[^1];
++    }
++}
+diff --git a/bad-deduction-phase1/src/BadDeduction.Core/Characters/CharacterProfile.cs b/bad-deduction-phase1/src/BadDeduction.Core/Characters/CharacterProfile.cs
+new file mode 100644
+index 0000000..14617c2
+--- /dev/null
++++ b/bad-deduction-phase1/src/BadDeduction.Core/Characters/CharacterProfile.cs
+@@ -0,0 +1,43 @@
++using BadDeduction.Content;
++
++namespace BadDeduction.Characters;
++
++/// <summary>Six integer traits, 0-100. Integers keep the simulation deterministic across platforms.</summary>
++public sealed class Personality
++{
++    public int Extraversion { get; set; }
++    public int Agreeableness { get; set; }
++    public int Conscientiousness { get; set; }
++    public int Neuroticism { get; set; }
++    public int Honesty { get; set; }
++    public int Courage { get; set; }
++
++    public IEnumerable<int> All()
++    {
++        yield return Extraversion; yield return Agreeableness; yield return Conscientiousness;
++        yield return Neuroticism; yield return Honesty; yield return Courage;
++    }
++}
++
++public sealed class Goal
++{
++    public string DefinitionId { get; set; } = "";
++    public GoalSlot Slot { get; set; }
++    /// <summary>Character the goal is aimed at (e.g. the family member to protect), if any.</summary>
++    public string? TargetId { get; set; }
++    /// <summary>0-100. Goals compete on priority; resolving conflicts is Phase 5/6.</summary>
++    public int Priority { get; set; }
++}
++
++/// <summary>
++/// Private, per-character data that must never reach gameplay UI directly (see PlayerView):
++/// personality, goals and secrets. Memory, beliefs and emotion join in Phase 4.
++/// </summary>
++public sealed class CharacterProfile
++{
++    public Personality Personality { get; set; } = new();
++    public List<Goal> Goals { get; set; } = new();
++    public List<string> SecretIds { get; set; } = new();
++    /// <summary>Characters sharing a household share a home and a surname.</summary>
++    public string HouseholdId { get; set; } = "";
++}
+diff --git a/bad-deduction-phase1/src/BadDeduction.Core/Content/CastContent.cs b/bad-deduction-phase1/src/BadDeduction.Core/Content/CastContent.cs
+new file mode 100644
+index 0000000..35575a0
+--- /dev/null
++++ b/bad-deduction-phase1/src/BadDeduction.Core/Content/CastContent.cs
+@@ -0,0 +1,54 @@
++using BadDeduction.Characters;
++
++namespace BadDeduction.Content;
++
++/// <summary>Data-driven job: where, when and who can hold it (data/occupations.json).</summary>
++public sealed class OccupationDefinition
++{
++    public string Id { get; set; } = "";
++    public string Name { get; set; } = "";
++    public CharacterKind Kind { get; set; }
++    public string WorkLocationId { get; set; } = "";
++    public int ShiftStartHour { get; set; }
++    public int ShiftEndHour { get; set; }
++    public int MinAge { get; set; }
++    public int MaxAge { get; set; }
++    public int Weight { get; set; } = 1;
++    /// <summary>Every run gets at least this many holders (e.g. exactly one guard captain).</summary>
++    public int MinCount { get; set; }
++    public int MaxCount { get; set; } = int.MaxValue;
++    public bool HasDayOff { get; set; } = true;
++}
++
++public enum GoalSlot { Primary, Secondary }
++
++/// <summary>Which relationship a goal is aimed at, when it has a target.</summary>
++public enum GoalTargetSource { Family, Friend }
++
++public sealed class GoalDefinition
++{
++    public string Id { get; set; } = "";
++    public string Label { get; set; } = "";
++    public GoalSlot Slot { get; set; }
++    public int Weight { get; set; } = 1;
++    public List<string> Requires { get; set; } = new();
++    public GoalTargetSource? TargetFrom { get; set; }
++}
++
++public sealed class SecretDefinition
++{
++    public string Id { get; set; } = "";
++    public string Label { get; set; } = "";
++    public int Severity { get; set; }
++    public int Weight { get; set; } = 1;
++}
++
++public sealed class NameTable
++{
++    public List<string> Given { get; set; } = new();
++    public List<string> Surnames { get; set; } = new();
++}
++
++public sealed class OccupationsFile { public List<OccupationDefinition> Occupations { get; set; } = new(); }
++public sealed class GoalsFile { public List<GoalDefinition> Goals { get; set; } = new(); }
++public sealed class SecretsFile { public List<SecretDefinition> Secrets { get; set; } = new(); }
+diff --git a/bad-deduction-phase1/src/BadDeduction.Core/Content/ContentDatabase.cs b/bad-deduction-phase1/src/BadDeduction.Core/Content/ContentDatabase.cs
+index 3c3dbba..97d4387 100644
+--- a/bad-deduction-phase1/src/BadDeduction.Core/Content/ContentDatabase.cs
++++ b/bad-deduction-phase1/src/BadDeduction.Core/Content/ContentDatabase.cs
+@@ -4,8 +4,8 @@ using System.Text.Json.Serialization;
+ namespace BadDeduction.Content;
+ 
+ /// <summary>
+-/// Read-only game content shared by every run. Phase 1 holds locations only; occupations,
+-/// personalities, evidence and crime definitions are added by later phases as JSON files.
++/// Read-only game content shared by every run. Locations (Phase 1) plus occupations, goals, secrets and
++/// names (Phase 2). Evidence and crime definitions are added by later phases as JSON files.
+ /// </summary>
+ public sealed class ContentDatabase
+ {
+@@ -23,10 +23,26 @@ public sealed class ContentDatabase
+     private readonly Dictionary<string, Dictionary<string, int>> _adjacency = new(StringComparer.Ordinal);
+     private readonly List<string> _buildErrors = new();
+ 
++    private readonly Dictionary<string, Dictionary<string, int>> _travel = new(StringComparer.Ordinal);
++
+     public IReadOnlyList<LocationDefinition> Locations { get; }
++    public IReadOnlyList<OccupationDefinition> Occupations { get; }
++    public IReadOnlyList<GoalDefinition> Goals { get; }
++    public IReadOnlyList<SecretDefinition> Secrets { get; }
++    public NameTable Names { get; }
+ 
+-    public ContentDatabase(IEnumerable<LocationDefinition> locations)
++    public ContentDatabase(
++        IEnumerable<LocationDefinition> locations,
++        IEnumerable<OccupationDefinition>? occupations = null,
++        IEnumerable<GoalDefinition>? goals = null,
++        IEnumerable<SecretDefinition>? secrets = null,
++        NameTable? names = null)
+     {
++        Occupations = (occupations ?? Array.Empty<OccupationDefinition>()).ToList();
++        Goals = (goals ?? Array.Empty<GoalDefinition>()).ToList();
++        Secrets = (secrets ?? Array.Empty<SecretDefinition>()).ToList();
++        Names = names ?? new NameTable();
++
+         var ordered = new List<LocationDefinition>();
+         foreach (var def in locations)
+         {
+@@ -62,6 +78,39 @@ public sealed class ContentDatabase
+     public LocationDefinition GetLocation(string id) =>
+         _locations.TryGetValue(id, out var d) ? d : throw new KeyNotFoundException($"Unknown location '{id}'.");
+ 
++    /// <summary>Shortest travel time in minutes between two locations (0 when identical).</summary>
++    public int TravelMinutes(string from, string to)
++    {
++        if (!_locations.ContainsKey(from)) throw new KeyNotFoundException($"Unknown location '{from}'.");
++        if (!_locations.ContainsKey(to)) throw new KeyNotFoundException($"Unknown location '{to}'.");
++        if (!_travel.TryGetValue(from, out var dist))
++            _travel[from] = dist = ShortestPaths(from);
++        return dist.TryGetValue(to, out var m)
++            ? m
++            : throw new InvalidOperationException($"'{to}' is unreachable from '{from}'.");
++    }
++
++    private Dictionary<string, int> ShortestPaths(string source)
++    {
++        var dist = new Dictionary<string, int>(StringComparer.Ordinal) { [source] = 0 };
++        var done = new HashSet<string>(StringComparer.Ordinal);
++        while (true)
++        {
++            string? best = null;
++            foreach (var (id, d) in dist)
++                if (!done.Contains(id) && (best is null || d < dist[best] || (d == dist[best] && string.CompareOrdinal(id, best) < 0)))
++                    best = id;
++            if (best is null) return dist;
++            done.Add(best);
++            foreach (var (next, w) in _adjacency[best])
++                if (!dist.TryGetValue(next, out var old) || dist[best] + w < old)
++                    dist[next] = dist[best] + w;
++        }
++    }
++
++    public OccupationDefinition GetOccupation(string id) =>
++        Occupations.FirstOrDefault(o => o.Id == id) ?? throw new KeyNotFoundException($"Unknown occupation '{id}'.");
++
+     public IReadOnlyDictionary<string, int> Neighbors(string id) =>
+         _adjacency.TryGetValue(id, out var n) ? n : throw new KeyNotFoundException($"Unknown location '{id}'.");
+ 
+@@ -80,6 +129,45 @@ public sealed class ContentDatabase
+             foreach (var def in Locations)
+                 if (!seen.Contains(def.Id)) errors.Add($"Location '{def.Id}' is unreachable from '{Locations[0].Id}'.");
+         }
++        errors.AddRange(ValidateCastContent());
++        return errors;
++    }
++
++    private IEnumerable<string> ValidateCastContent()
++    {
++        var errors = new List<string>();
++        var occIds = new HashSet<string>(StringComparer.Ordinal);
++        foreach (var o in Occupations)
++        {
++            if (string.IsNullOrWhiteSpace(o.Id) || !occIds.Add(o.Id)) errors.Add($"Occupation id '{o.Id}' is empty or duplicated.");
++            if (!_locations.ContainsKey(o.WorkLocationId)) errors.Add($"Occupation '{o.Id}' works at unknown location '{o.WorkLocationId}'.");
++            if (o.ShiftStartHour < 0 || o.ShiftEndHour > 23 || o.ShiftStartHour >= o.ShiftEndHour)
++                errors.Add($"Occupation '{o.Id}' has an invalid shift {o.ShiftStartHour}-{o.ShiftEndHour} (must be within 0-23).");
++            if (o.MinAge < 18 || o.MinAge > o.MaxAge) errors.Add($"Occupation '{o.Id}' has an invalid age range {o.MinAge}-{o.MaxAge}.");
++            if (o.Weight <= 0 || o.MaxCount <= 0) errors.Add($"Occupation '{o.Id}' needs positive weight and maxCount.");
++            if (o.MinCount < 0 || o.MinCount > o.MaxCount) errors.Add($"Occupation '{o.Id}' has minCount outside 0..maxCount.");
++        }
++
++        var goalIds = new HashSet<string>(StringComparer.Ordinal);
++        var knownTags = new HashSet<string> { "family", "friend", "secret", "police", "civilian" };
++        foreach (var g in Goals)
++        {
++            if (string.IsNullOrWhiteSpace(g.Id) || !goalIds.Add(g.Id)) errors.Add($"Goal id '{g.Id}' is empty or duplicated.");
++            if (g.Weight <= 0) errors.Add($"Goal '{g.Id}' needs a positive weight.");
++            foreach (var tag in g.Requires)
++                if (!knownTags.Contains(tag)) errors.Add($"Goal '{g.Id}' requires unknown tag '{tag}'.");
++        }
++
++        var secretIds = new HashSet<string>(StringComparer.Ordinal);
++        foreach (var sd in Secrets)
++        {
++            if (string.IsNullOrWhiteSpace(sd.Id) || !secretIds.Add(sd.Id)) errors.Add($"Secret id '{sd.Id}' is empty or duplicated.");
++            if (sd.Severity is < 1 or > 3) errors.Add($"Secret '{sd.Id}' severity must be 1-3.");
++            if (sd.Weight <= 0) errors.Add($"Secret '{sd.Id}' needs a positive weight.");
++        }
++
++        if (Names.Given.Distinct().Count() != Names.Given.Count || Names.Surnames.Distinct().Count() != Names.Surnames.Count)
++            errors.Add("Name tables contain duplicates.");
+         return errors;
+     }
+ 
+@@ -95,7 +183,20 @@ public sealed class ContentDatabase
+         var path = Path.Combine(dataDirectory, "locations.json");
+         var file = JsonSerializer.Deserialize<LocationsFile>(File.ReadAllText(path), JsonOptions)
+                    ?? throw new InvalidDataException($"'{path}' is empty.");
+-        var db = new ContentDatabase(file.Locations);
++
++        T Read<T>(string name) where T : class
++        {
++            var p = Path.Combine(dataDirectory, name);
++            return JsonSerializer.Deserialize<T>(File.ReadAllText(p), JsonOptions)
++                   ?? throw new InvalidDataException($"'{p}' is empty.");
++        }
++
++        var db = new ContentDatabase(
++            file.Locations,
++            Read<OccupationsFile>("occupations.json").Occupations,
++            Read<GoalsFile>("goals.json").Goals,
++            Read<SecretsFile>("secrets.json").Secrets,
++            Read<NameTable>("names.json"));
+         db.ThrowIfInvalid();
+         return db;
+     }
+diff --git a/bad-deduction-phase1/src/BadDeduction.Core/Core/GameSession.cs b/bad-deduction-phase1/src/BadDeduction.Core/Core/GameSession.cs
+index fb1b276..969b883 100644
+--- a/bad-deduction-phase1/src/BadDeduction.Core/Core/GameSession.cs
++++ b/bad-deduction-phase1/src/BadDeduction.Core/Core/GameSession.cs
+@@ -1,5 +1,6 @@
+ using BadDeduction.Characters;
+ using BadDeduction.Content;
++using BadDeduction.Social;
+ using BadDeduction.World;
+ 
+ namespace BadDeduction.Core;
+@@ -16,6 +17,9 @@ public sealed class GameSession
+     public TimeSystem Time { get; }
+     public WorldService World { get; }
+     public HiddenIdentitySystem Identity { get; }
++    public ScheduleSystem Schedules { get; }
++    public RelationshipGraph Relationships { get; }
++    public CastGenerator Cast { get; }
+     public PlayerView View { get; }
+     public DebugAccess Debug { get; }
+ 
+@@ -30,6 +34,9 @@ public sealed class GameSession
+         Time = new TimeSystem(state, Events);
+         World = new WorldService(state, Events, content);
+         Identity = new HiddenIdentitySystem(state);
++        Schedules = new ScheduleSystem(state, content);
++        Relationships = new RelationshipGraph(state);
++        Cast = new CastGenerator(state, content, World, Relationships);
+         View = new PlayerView(state);
+         Debug = new DebugAccess(state);
+         Rng = new DeterministicRandom(state.SimRng);
+@@ -70,6 +77,7 @@ public sealed class GameSession
+             if (!content.HasLocation(id)) errors.Add($"Save references location '{id}' which is not in the loaded content.");
+         foreach (var def in content.Locations)
+             if (!state.World.Locations.ContainsKey(def.Id)) errors.Add($"Loaded content has location '{def.Id}' missing from the save.");
++        errors.AddRange(GameStateValidator.ValidateAgainstContent(state, content));
+         if (errors.Count > 0)
+             throw new SaveFormatException("State failed validation:\n - " + string.Join("\n - ", errors));
+         return new GameSession(state, content);
+diff --git a/bad-deduction-phase1/src/BadDeduction.Core/Core/GameStateValidator.cs b/bad-deduction-phase1/src/BadDeduction.Core/Core/GameStateValidator.cs
+index c3faee4..602b198 100644
+--- a/bad-deduction-phase1/src/BadDeduction.Core/Core/GameStateValidator.cs
++++ b/bad-deduction-phase1/src/BadDeduction.Core/Core/GameStateValidator.cs
+@@ -1,4 +1,6 @@
+ using BadDeduction.Characters;
++using BadDeduction.Content;
++using BadDeduction.World;
+ 
+ namespace BadDeduction.Core;
+ 
+@@ -29,6 +31,8 @@ public static class GameStateValidator
+                 errors.Add($"Character '{c.Id}' has unknown work location '{c.WorkLocationId}'.");
+         }
+ 
++        errors.AddRange(ValidateCast(state));
++
+         // Event log
+         var log = state.EventLog;
+         if (log.NextId != log.Events.Count + 1) errors.Add("EventLog.NextId is inconsistent with the number of events.");
+@@ -68,4 +72,53 @@ public static class GameStateValidator
+ 
+         return errors;
+     }
++
++    private static IEnumerable<string> ValidateCast(GameState state)
++    {
++        var errors = new List<string>();
++        var w = state.World;
++
++        foreach (var (id, profile) in w.Profiles)
++        {
++            if (!w.Characters.ContainsKey(id)) errors.Add($"Profile exists for unknown character '{id}'.");
++            foreach (var t in profile.Personality.All())
++                if (t is < 0 or > 100) errors.Add($"Profile '{id}' has a personality trait outside 0-100.");
++            foreach (var g in profile.Goals)
++            {
++                if (g.Priority is < 0 or > 100) errors.Add($"Profile '{id}' has a goal priority outside 0-100.");
++                if (g.TargetId is not null && !w.Characters.ContainsKey(g.TargetId)) errors.Add($"Profile '{id}' has a goal aimed at unknown character '{g.TargetId}'.");
++            }
++        }
++
++        foreach (var id in w.Schedules.Keys)
++            if (!w.Characters.ContainsKey(id)) errors.Add($"Schedule exists for unknown character '{id}'.");
++
++        var seen = new HashSet<(string, string)>();
++        foreach (var e in w.Relationships)
++        {
++            if (!w.Characters.ContainsKey(e.From) || !w.Characters.ContainsKey(e.To)) errors.Add($"Relationship {e.From}->{e.To} references an unknown character.");
++            else if (e.From == e.To) errors.Add($"Relationship {e.From}->{e.To} points at itself.");
++            if (!seen.Add((e.From, e.To))) errors.Add($"Duplicate relationship {e.From}->{e.To}.");
++        }
++        foreach (var (from, to) in seen)
++            if (!seen.Contains((to, from))) errors.Add($"Relationship {from}->{to} has no reverse edge.");
++        return errors;
++    }
++
++    /// <summary>Checks that need the loaded content: known goal/secret ids and travel-feasible schedules.</summary>
++    public static IEnumerable<string> ValidateAgainstContent(GameState state, ContentDatabase content)
++    {
++        var errors = new List<string>();
++        foreach (var (id, profile) in state.World.Profiles)
++        {
++            foreach (var g in profile.Goals)
++                if (!content.Goals.Any(d => d.Id == g.DefinitionId)) errors.Add($"Profile '{id}' has unknown goal '{g.DefinitionId}'.");
++            foreach (var sid in profile.SecretIds)
++                if (!content.Secrets.Any(d => d.Id == sid)) errors.Add($"Profile '{id}' has unknown secret '{sid}'.");
++        }
++        foreach (var (id, schedule) in state.World.Schedules)
++            if (state.World.Characters.TryGetValue(id, out var c))
++                errors.AddRange(ScheduleSystem.Check(id, c.HomeLocationId, schedule, content));
++        return errors;
++    }
+ }
+diff --git a/bad-deduction-phase1/src/BadDeduction.Core/Core/SaveSystem.cs b/bad-deduction-phase1/src/BadDeduction.Core/Core/SaveSystem.cs
+index a38e436..2ac35f0 100644
+--- a/bad-deduction-phase1/src/BadDeduction.Core/Core/SaveSystem.cs
++++ b/bad-deduction-phase1/src/BadDeduction.Core/Core/SaveSystem.cs
+@@ -26,10 +26,20 @@ public sealed class SaveEnvelope
+ public static class SaveSystem
+ {
+     public const string GameId = "BadDeduction";
+-    public const int CurrentFormatVersion = 1;
++    public const int CurrentFormatVersion = 2;
+ 
+     /// <summary>Migrations keyed by the version they upgrade FROM (operate on the raw JSON tree).</summary>
+-    private static readonly Dictionary<int, Action<JsonNode>> Migrations = new();
++    private static readonly Dictionary<int, Action<JsonNode>> Migrations = new()
++    {
++        // v1 -> v2 (Phase 2): worlds gain character profiles, schedules and relationships.
++        [1] = root =>
++        {
++            if (root["State"]?["World"] is not JsonObject world) return;
++            world["Profiles"] ??= new JsonObject();
++            world["Schedules"] ??= new JsonObject();
++            world["Relationships"] ??= new JsonArray();
++        },
++    };
+ 
+     private static readonly JsonSerializerOptions Compact = CreateOptions(indented: false);
+     private static readonly JsonSerializerOptions Indented = CreateOptions(indented: true);
+diff --git a/bad-deduction-phase1/src/BadDeduction.Core/Social/Relationship.cs b/bad-deduction-phase1/src/BadDeduction.Core/Social/Relationship.cs
+new file mode 100644
+index 0000000..78ce9e1
+--- /dev/null
++++ b/bad-deduction-phase1/src/BadDeduction.Core/Social/Relationship.cs
+@@ -0,0 +1,15 @@
++namespace BadDeduction.Social;
++
++/// <summary>
++/// Categorical tag for the graph view. Numeric axes (trust, fear, respect, loyalty, suspicion,
++/// influence, affection, resentment) are added in Phase 3.
++/// </summary>
++public enum RelationshipKind { Family, Friend, Colleague, Rival, Acquaintance }
++
++/// <summary>A directed edge; every relationship is stored as two edges (A→B and B→A) so each side can diverge later.</summary>
++public sealed class RelationshipEdge
++{
++    public string From { get; set; } = "";
++    public string To { get; set; } = "";
++    public RelationshipKind Kind { get; set; }
++}
+diff --git a/bad-deduction-phase1/src/BadDeduction.Core/Social/RelationshipGraph.cs b/bad-deduction-phase1/src/BadDeduction.Core/Social/RelationshipGraph.cs
+new file mode 100644
+index 0000000..9512c15
+--- /dev/null
++++ b/bad-deduction-phase1/src/BadDeduction.Core/Social/RelationshipGraph.cs
+@@ -0,0 +1,54 @@
++using BadDeduction.Core;
++
++namespace BadDeduction.Social;
++
++/// <summary>Read/write access to the relationship edges stored in the world state.</summary>
++public sealed class RelationshipGraph
++{
++    private readonly GameState _state;
++
++    public RelationshipGraph(GameState state) => _state = state;
++
++    public IReadOnlyList<RelationshipEdge> Edges => _state.World.Relationships;
++
++    public RelationshipEdge? Get(string from, string to) =>
++        _state.World.Relationships.FirstOrDefault(e => e.From == from && e.To == to);
++
++    public IEnumerable<RelationshipEdge> From(string id) => _state.World.Relationships.Where(e => e.From == id);
++
++    public IEnumerable<string> Of(string id, RelationshipKind kind) =>
++        From(id).Where(e => e.Kind == kind).Select(e => e.To);
++
++    /// <summary>Adds both directions. Returns false (and adds nothing) if the pair is already related or invalid.</summary>
++    public bool Connect(string a, string b, RelationshipKind kind)
++    {
++        if (a == b || !_state.World.Characters.ContainsKey(a) || !_state.World.Characters.ContainsKey(b)) return false;
++        if (Get(a, b) is not null || Get(b, a) is not null) return false;
++        _state.World.Relationships.Add(new RelationshipEdge { From = a, To = b, Kind = kind });
++        _state.World.Relationships.Add(new RelationshipEdge { From = b, To = a, Kind = kind });
++        return true;
++    }
++
++    /// <summary>Connected components over the given character ids, each sorted ordinally, ordered by first member.</summary>
++    public List<List<string>> Components(IEnumerable<string> ids)
++    {
++        var all = ids.OrderBy(i => i, StringComparer.Ordinal).ToList();
++        var seen = new HashSet<string>(StringComparer.Ordinal);
++        var result = new List<List<string>>();
++        foreach (var start in all)
++        {
++            if (!seen.Add(start)) continue;
++            var comp = new List<string> { start };
++            var stack = new Stack<string>();
++            stack.Push(start);
++            while (stack.Count > 0)
++                foreach (var e in From(stack.Pop()))
++                    if (seen.Add(e.To)) { comp.Add(e.To); stack.Push(e.To); }
++            comp.Sort(StringComparer.Ordinal);
++            result.Add(comp);
++        }
++        return result;
++    }
++
++    public bool IsConnected(IEnumerable<string> ids) => Components(ids).Count <= 1;
++}
+diff --git a/bad-deduction-phase1/src/BadDeduction.Core/World/Schedule.cs b/bad-deduction-phase1/src/BadDeduction.Core/World/Schedule.cs
+new file mode 100644
+index 0000000..ddd9746
+--- /dev/null
++++ b/bad-deduction-phase1/src/BadDeduction.Core/World/Schedule.cs
+@@ -0,0 +1,29 @@
++using BadDeduction.Characters;
++
++namespace BadDeduction.World;
++
++/// <summary>
++/// Where a character is supposed to be during [StartMinute, EndMinute) of a day.
++/// StartMinute is the *arrival deadline*: the character leaves the previous block early
++/// enough to be here on time (travel happens at the tail of the previous block).
++/// </summary>
++public sealed class ScheduleBlock
++{
++    public int StartMinute { get; set; }
++    public int EndMinute { get; set; }
++    public string LocationId { get; set; } = "";
++    public Activity Activity { get; set; }
++}
++
++public sealed class Schedule
++{
++    public List<ScheduleBlock> Workday { get; set; } = new();
++    public List<ScheduleBlock> DayOff { get; set; } = new();
++
++    /// <summary>Days with (day - 1) % 7 == DayOffIndex use the DayOff blocks. -1 means no day off.</summary>
++    public int DayOffIndex { get; set; } = -1;
++
++    public bool IsDayOff(int day) => DayOffIndex >= 0 && (day - 1) % 7 == DayOffIndex;
++
++    public IReadOnlyList<ScheduleBlock> ForDay(int day) => IsDayOff(day) ? DayOff : Workday;
++}
+diff --git a/bad-deduction-phase1/src/BadDeduction.Core/World/ScheduleSystem.cs b/bad-deduction-phase1/src/BadDeduction.Core/World/ScheduleSystem.cs
+new file mode 100644
+index 0000000..a9910f2
+--- /dev/null
++++ b/bad-deduction-phase1/src/BadDeduction.Core/World/ScheduleSystem.cs
+@@ -0,0 +1,81 @@
++using BadDeduction.Characters;
++using BadDeduction.Content;
++using BadDeduction.Core;
++
++namespace BadDeduction.World;
++
++/// <summary>Reads schedules. Movement along the schedule (and interruptions) is Phase 5.</summary>
++public sealed class ScheduleSystem
++{
++    private readonly GameState _state;
++    private readonly ContentDatabase _content;
++
++    public ScheduleSystem(GameState state, ContentDatabase content)
++    {
++        _state = state;
++        _content = content;
++    }
++
++    public Schedule GetSchedule(string characterId) =>
++        _state.World.Schedules.TryGetValue(characterId, out var s)
++            ? s
++            : throw new KeyNotFoundException($"Character '{characterId}' has no schedule.");
++
++    /// <summary>The block that applies at a game time (blocks tile the whole day, so one always exists).</summary>
++    public ScheduleBlock BlockAt(string characterId, GameTime time)
++    {
++        var blocks = GetSchedule(characterId).ForDay(time.Day);
++        var minute = time.MinuteOfDay;
++        foreach (var b in blocks)
++            if (minute >= b.StartMinute && minute < b.EndMinute) return b;
++        throw new InvalidOperationException($"Schedule of '{characterId}' does not cover minute {minute}.");
++    }
++
++    /// <summary>Puts every scheduled character at the place and activity their schedule says for the current time.</summary>
++    public void PlaceAtScheduledPositions()
++    {
++        var now = new GameTime(_state.TotalMinutes);
++        foreach (var (id, c) in _state.World.Characters)
++        {
++            if (!c.IsAlive || !_state.World.Schedules.ContainsKey(id)) continue;
++            var block = BlockAt(id, now);
++            c.CurrentLocationId = block.LocationId;
++            c.Activity = block.Activity;
++        }
++    }
++
++    /// <summary>Returns every problem with a schedule (empty when valid). Used by the validator and tests.</summary>
++    public static IReadOnlyList<string> Check(string characterId, string homeId, Schedule schedule, ContentDatabase content)
++    {
++        var errors = new List<string>();
++        CheckBlocks($"{characterId}/workday", homeId, schedule.Workday, content, errors);
++        if (schedule.DayOffIndex is < -1 or > 6) errors.Add($"{characterId}: DayOffIndex {schedule.DayOffIndex} out of range.");
++        if (schedule.DayOffIndex >= 0) CheckBlocks($"{characterId}/dayoff", homeId, schedule.DayOff, content, errors);
++        return errors;
++    }
++
++    private static void CheckBlocks(string label, string homeId, List<ScheduleBlock> blocks, ContentDatabase content, List<string> errors)
++    {
++        if (blocks.Count == 0) { errors.Add($"{label}: no blocks."); return; }
++        if (blocks[0].StartMinute != 0) errors.Add($"{label}: first block must start at 0.");
++        if (blocks[^1].EndMinute != GameTime.MinutesPerDay) errors.Add($"{label}: last block must end at midnight.");
++
++        for (var i = 0; i < blocks.Count; i++)
++        {
++            var b = blocks[i];
++            if (b.EndMinute <= b.StartMinute) errors.Add($"{label}: block {i} is empty or reversed.");
++            if (!content.HasLocation(b.LocationId)) { errors.Add($"{label}: block {i} has unknown location '{b.LocationId}'."); continue; }
++            if (i > 0 && blocks[i - 1].EndMinute != b.StartMinute) errors.Add($"{label}: gap or overlap before block {i}.");
++
++            // Travel to the next block happens inside this one, so it must fit.
++            var nextLoc = i + 1 < blocks.Count ? blocks[i + 1].LocationId : blocks[0].LocationId;
++            if (content.HasLocation(nextLoc) && b.LocationId != nextLoc
++                && b.EndMinute - b.StartMinute < content.TravelMinutes(b.LocationId, nextLoc))
++                errors.Add($"{label}: block {i} at {b.LocationId} is too short to travel to {nextLoc}.");
++        }
++
++        // The day must loop: the character ends the day where the next day begins (home, asleep).
++        if (blocks[0].LocationId != homeId) errors.Add($"{label}: the day must start at home.");
++        if (blocks[^1].LocationId != blocks[0].LocationId) errors.Add($"{label}: the day must end where it starts.");
++    }
++}
+diff --git a/bad-deduction-phase1/src/BadDeduction.Core/World/WorldState.cs b/bad-deduction-phase1/src/BadDeduction.Core/World/WorldState.cs
+index 17fc582..841380c 100644
+--- a/bad-deduction-phase1/src/BadDeduction.Core/World/WorldState.cs
++++ b/bad-deduction-phase1/src/BadDeduction.Core/World/WorldState.cs
+@@ -1,4 +1,5 @@
+ using BadDeduction.Characters;
++using BadDeduction.Social;
+ 
+ namespace BadDeduction.World;
+ 
+@@ -15,4 +16,9 @@ public sealed class WorldState
+ {
+     public Dictionary<string, LocationState> Locations { get; set; } = new();
+     public Dictionary<string, CharacterState> Characters { get; set; } = new();
++
++    // Phase 2. Keyed by character id; optional per character (hand-built test worlds have none).
++    public Dictionary<string, CharacterProfile> Profiles { get; set; } = new();
++    public Dictionary<string, Schedule> Schedules { get; set; } = new();
++    public List<RelationshipEdge> Relationships { get; set; } = new();
+ }
+diff --git a/bad-deduction-phase1/tests/BadDeduction.Tests/CastTests.cs b/bad-deduction-phase1/tests/BadDeduction.Tests/CastTests.cs
+new file mode 100644
+index 0000000..c499f7f
+--- /dev/null
++++ b/bad-deduction-phase1/tests/BadDeduction.Tests/CastTests.cs
+@@ -0,0 +1,198 @@
++using BadDeduction.Characters;
++using BadDeduction.Content;
++using BadDeduction.Core;
++using BadDeduction.Social;
++using BadDeduction.Tests.Harness;
++using BadDeduction.World;
++
++namespace BadDeduction.Tests;
++
++public sealed class CastTests
++{
++    [Fact]
++    public void Default_cast_matches_the_vertical_slice_size()
++    {
++        var s = CastSupport.NewCastSession();
++        var all = s.State.World.Characters.Values.ToList();
++        Assert.Equal(22, all.Count);
++        Assert.Equal(17, all.Count(c => c.Kind == CharacterKind.Civilian));
++        Assert.Equal(5, all.Count(c => c.Kind == CharacterKind.Police));
++        Assert.Equal(1, all.Count(c => c.OccupationId == "guard_captain"));
++        Assert.Equal(0, GameStateValidator.Validate(s.State).Count);
++        Assert.Equal(0, GameStateValidator.ValidateAgainstContent(s.State, s.Content).Count());
++    }
++
++    [Fact]
++    public void Same_seed_gives_the_same_cast_and_different_seeds_give_different_social_worlds()
++    {
++        var a = CastSupport.NewCastSession(7).StateHash();
++        Assert.Equal(a, CastSupport.NewCastSession(7).StateHash());
++
++        var names = new HashSet<string>();
++        var structures = new HashSet<string>();
++        for (ulong seed = 1; seed <= 30; seed++)
++        {
++            var s = CastSupport.NewCastSession(seed);
++            names.Add(string.Join("|", s.State.World.Characters.Values.Select(c => c.DisplayName)));
++            structures.Add(string.Join("|", s.State.World.Relationships.Select(e => $"{e.From}>{e.To}:{e.Kind}")));
++        }
++        Assert.Equal(30, names.Count, "every seed should produce a different cast");
++        Assert.Equal(30, structures.Count, "every seed should produce a different relationship graph");
++    }
++
++    [Fact]
++    public void Generating_the_cast_does_not_consume_the_simulation_rng()
++    {
++        var before = GameSession.NewRun(5, Campaign.Malvr, Difficulty.Easy, TestSupport.LoadContent()).State.SimRng;
++        var s = CastSupport.NewCastSession(5);
++        Assert.Equal(before.S0, s.State.SimRng.S0);
++        Assert.Equal(before.S3, s.State.SimRng.S3);
++    }
++
++    [Fact]
++    public void Ids_carry_no_information_about_occupation()
++    {
++        // The captain must not always be c_01, or a player could learn "c_01 is the captain".
++        var captainIds = new HashSet<string>();
++        for (ulong seed = 1; seed <= 40; seed++)
++            captainIds.Add(CastSupport.NewCastSession(seed).State.World.Characters.Values.Single(c => c.OccupationId == "guard_captain").Id);
++        Assert.True(captainIds.Count >= 10, $"captain id took only {captainIds.Count} distinct values");
++    }
++
++    [Fact]
++    public void Names_are_unique_and_households_share_home_and_surname()
++    {
++        for (ulong seed = 1; seed <= 20; seed++)
++        {
++            var s = CastSupport.NewCastSession(seed);
++            var chars = s.State.World.Characters.Values.ToList();
++            Assert.Equal(chars.Count, chars.Select(c => c.DisplayName).Distinct().Count(), $"seed {seed}: duplicate full names");
++
++            foreach (var group in chars.GroupBy(c => s.State.World.Profiles[c.Id].HouseholdId))
++            {
++                Assert.Equal(1, group.Select(c => c.DisplayName.Split(' ')[1]).Distinct().Count(), $"seed {seed}: household surnames differ");
++                Assert.Equal(1, group.Select(c => c.HomeLocationId).Distinct().Count());
++            }
++        }
++    }
++
++    [Fact]
++    public void Ages_and_jobs_respect_occupation_definitions_and_family_ages_make_sense()
++    {
++        for (ulong seed = 1; seed <= 40; seed++)
++        {
++            var s = CastSupport.NewCastSession(seed);
++            var counts = new Dictionary<string, int>();
++            foreach (var c in s.State.World.Characters.Values)
++            {
++                var occ = s.Content.GetOccupation(c.OccupationId);
++                Assert.True(c.Age >= occ.MinAge && c.Age <= occ.MaxAge, $"seed {seed}: {c.Id} age {c.Age} outside {occ.Id} range");
++                Assert.Equal(occ.Kind, c.Kind);
++                Assert.Equal(occ.WorkLocationId, c.WorkLocationId);
++                counts[occ.Id] = counts.GetValueOrDefault(occ.Id) + 1;
++            }
++            foreach (var (id, n) in counts) Assert.True(n <= s.Content.GetOccupation(id).MaxCount, $"seed {seed}: too many {id}");
++        }
++    }
++
++    [Fact]
++    public void Slice_locations_only_and_no_hidden_roles_are_assigned()
++    {
++        var s = CastSupport.NewCastSession(11);
++        Assert.Equal(0, s.State.Truth.HiddenRoles.Count);
++        foreach (var c in s.State.World.Characters.Values)
++        {
++            Assert.NotEqual("loc_harbor", c.WorkLocationId);
++            foreach (var b in s.State.World.Schedules[c.Id].Workday.Concat(s.State.World.Schedules[c.Id].DayOff))
++            {
++                Assert.NotEqual("loc_harbor", b.LocationId);
++                Assert.NotEqual("loc_underground", b.LocationId);
++            }
++        }
++    }
++
++    [Fact]
++    public void Personality_is_in_range_and_varies()
++    {
++        var s = CastSupport.NewCastSession(3);
++        foreach (var p in s.State.World.Profiles.Values)
++            foreach (var t in p.Personality.All()) Assert.True(t is >= 0 and <= 100);
++        Assert.True(s.State.World.Profiles.Values.Select(p => p.Personality.Honesty).Distinct().Count() > 8);
++    }
++
++    [Fact]
++    public void Goals_match_the_character_and_can_target_real_relatives_and_friends()
++    {
++        for (ulong seed = 1; seed <= 40; seed++)
++        {
++            var s = CastSupport.NewCastSession(seed);
++            foreach (var c in s.State.World.Characters.Values)
++            {
++                var profile = s.State.World.Profiles[c.Id];
++                Assert.Equal(GoalSlot.Primary, profile.Goals[0].Slot);
++                Assert.Equal(1, profile.Goals.Count(g => g.Slot == GoalSlot.Primary));
++                Assert.True(profile.Goals.Any(g => g.Slot == GoalSlot.Secondary));
++                Assert.Equal(profile.Goals.Count, profile.Goals.Select(g => g.DefinitionId).Distinct().Count(), "duplicate goal");
++
++                foreach (var g in profile.Goals)
++                {
++                    var def = s.Content.Goals.Single(d => d.Id == g.DefinitionId);
++                    if (def.Requires.Contains("police")) Assert.Equal(CharacterKind.Police, c.Kind);
++                    if (def.Requires.Contains("civilian")) Assert.Equal(CharacterKind.Civilian, c.Kind);
++                    if (def.Requires.Contains("secret")) Assert.True(profile.SecretIds.Count > 0, $"{def.Id} without a secret");
++                    if (def.TargetFrom == GoalTargetSource.Family)
++                        Assert.True(s.Relationships.Get(c.Id, g.TargetId!)?.Kind == RelationshipKind.Family, "family goal must target family");
++                    if (def.TargetFrom == GoalTargetSource.Friend)
++                        Assert.True(s.Relationships.Get(c.Id, g.TargetId!)?.Kind == RelationshipKind.Friend, "friend goal must target a friend");
++                }
++            }
++        }
++    }
++
++    [Fact]
++    public void Secrets_exist_but_are_not_universal_and_dishonest_people_have_more()
++    {
++        int withSecret = 0, total = 0, lowHonesty = 0, lowWith = 0, highHonesty = 0, highWith = 0;
++        for (ulong seed = 1; seed <= 60; seed++)
++            foreach (var p in CastSupport.NewCastSession(seed).State.World.Profiles.Values)
++            {
++                total++;
++                var has = p.SecretIds.Count > 0;
++                if (has) withSecret++;
++                if (p.Personality.Honesty < 35) { lowHonesty++; if (has) lowWith++; }
++                if (p.Personality.Honesty > 65) { highHonesty++; if (has) highWith++; }
++            }
++        Assert.True(withSecret > total / 10 && withSecret < total / 2, $"{withSecret}/{total} characters have secrets");
++        Assert.True((double)lowWith / lowHonesty > (double)highWith / highHonesty, "low-honesty characters should hide more");
++    }
++
++    [Fact]
++    public void Private_profile_data_never_reaches_the_public_view()
++    {
++        var s = CastSupport.NewCastSession(9);
++        var id = s.State.World.Characters.Keys.First();
++        var info = s.View.PublicProfile(id)!;
++        var fields = info.GetType().GetProperties().Select(p => p.Name).ToHashSet();
++        foreach (var forbidden in new[] { "Personality", "Goals", "SecretIds", "Secrets", "HouseholdId", "Profile" })
++            Assert.False(fields.Contains(forbidden), $"PublicCharacterInfo exposes {forbidden}");
++    }
++
++    [Fact]
++    public void Cast_can_only_be_generated_into_an_empty_world_and_bad_specs_fail_loudly()
++    {
++        var s = CastSupport.NewCastSession(1);
++        Assert.Throws<InvalidOperationException>(() => s.Cast.Generate(new CastSpec()));
++
++        var fresh = GameSession.NewRun(1, Campaign.Lumiel, Difficulty.Easy, TestSupport.LoadContent());
++        Assert.Throws<ArgumentException>(() => fresh.Cast.Generate(new CastSpec { HomeLocationId = "loc_nowhere" }));
++        Assert.Throws<InvalidOperationException>(() => fresh.Cast.Generate(new CastSpec { Police = 0, Civilians = 5 }));
++    }
++
++    [Fact]
++    public void Other_cast_sizes_work()
++    {
++        var s = CastSupport.NewCastSession(4, new CastSpec { Civilians = 8, Police = 2 });
++        Assert.Equal(10, s.State.World.Characters.Count);
++        Assert.True(s.Relationships.IsConnected(s.State.World.Characters.Keys));
++    }
++}
+diff --git a/bad-deduction-phase1/tests/BadDeduction.Tests/ContentTests.cs b/bad-deduction-phase1/tests/BadDeduction.Tests/ContentTests.cs
+index af16137..315f603 100644
+--- a/bad-deduction-phase1/tests/BadDeduction.Tests/ContentTests.cs
++++ b/bad-deduction-phase1/tests/BadDeduction.Tests/ContentTests.cs
+@@ -1,3 +1,4 @@
++using BadDeduction.Characters;
+ using BadDeduction.Content;
+ using BadDeduction.Tests.Harness;
+ 
+@@ -59,4 +60,51 @@ public sealed class ContentTests
+         }
+         finally { Directory.Delete(dir, recursive: true); }
+     }
++
++    [Fact]
++    public void Travel_minutes_are_shortest_paths_and_symmetric()
++    {
++        var db = TestSupport.LoadContent();
++        Assert.Equal(0, db.TravelMinutes("loc_church", "loc_church"));
++        Assert.Equal(6, db.TravelMinutes("loc_central_market", "loc_city_hall"));
++        // residential -> guard station has no direct road: it goes via market (8+7) or city hall (9+5).
++        Assert.Equal(14, db.TravelMinutes("loc_residential", "loc_guard_station"));
++        foreach (var a in db.Locations)
++            foreach (var b in db.Locations)
++                Assert.Equal(db.TravelMinutes(a.Id, b.Id), db.TravelMinutes(b.Id, a.Id));
++        Assert.Throws<KeyNotFoundException>(() => db.TravelMinutes("loc_church", "nowhere"));
++    }
++
++    [Fact]
++    public void Shipped_cast_content_is_valid_and_complete()
++    {
++        var db = TestSupport.LoadContent();
++        Assert.Equal(0, db.Validate().Count);
++        Assert.True(db.Occupations.Count >= 10 && db.Goals.Count >= 8 && db.Secrets.Count >= 4);
++        Assert.True(db.Names.Given.Count >= 30 && db.Names.Surnames.Count >= 25);
++        Assert.True(db.Occupations.Any(o => o.Kind == CharacterKind.Police));
++    }
++
++    [Fact]
++    public void Cast_content_validation_catches_bad_data()
++    {
++        var loc = new LocationDefinition { Id = "a", Name = "A" };
++        OccupationDefinition Occ(Action<OccupationDefinition> tweak)
++        {
++            var o = new OccupationDefinition { Id = "o", Name = "O", WorkLocationId = "a", ShiftStartHour = 8, ShiftEndHour = 16, MinAge = 20, MaxAge = 60 };
++            tweak(o);
++            return o;
++        }
++        bool Bad(OccupationDefinition o, string expected) =>
++            new ContentDatabase(new[] { loc }, new[] { o }).Validate().Any(e => e.Contains(expected));
++
++        Assert.True(Bad(Occ(o => o.WorkLocationId = "ghost"), "unknown location"));
++        Assert.True(Bad(Occ(o => o.ShiftEndHour = 24), "invalid shift"));
++        Assert.True(Bad(Occ(o => o.MinAge = 10), "age range"));
++        Assert.True(Bad(Occ(o => { o.MinCount = 3; o.MaxCount = 2; }), "minCount"));
++        Assert.True(new ContentDatabase(new[] { loc }, goals: new[] { new GoalDefinition { Id = "g", Requires = { "nonsense" } } })
++            .Validate().Any(e => e.Contains("unknown tag")));
++        Assert.True(new ContentDatabase(new[] { loc }, secrets: new[] { new SecretDefinition { Id = "s", Severity = 9 } })
++            .Validate().Any(e => e.Contains("severity")));
++    }
+ }
+diff --git a/bad-deduction-phase1/tests/BadDeduction.Tests/RelationshipTests.cs b/bad-deduction-phase1/tests/BadDeduction.Tests/RelationshipTests.cs
+new file mode 100644
+index 0000000..8cee603
+--- /dev/null
++++ b/bad-deduction-phase1/tests/BadDeduction.Tests/RelationshipTests.cs
+@@ -0,0 +1,98 @@
++using BadDeduction.Characters;
++using BadDeduction.Core;
++using BadDeduction.Social;
++using BadDeduction.Tests.Harness;
++
++namespace BadDeduction.Tests;
++
++public sealed class RelationshipTests
++{
++    [Fact]
++    public void Every_relationship_has_a_reverse_edge_of_the_same_kind_and_no_self_edges()
++    {
++        for (ulong seed = 1; seed <= 30; seed++)
++        {
++            var s = CastSupport.NewCastSession(seed);
++            foreach (var e in s.State.World.Relationships)
++            {
++                Assert.NotEqual(e.From, e.To);
++                Assert.Equal(e.Kind, s.Relationships.Get(e.To, e.From)!.Kind);
++            }
++        }
++    }
++
++    [Fact]
++    public void The_social_network_is_one_connected_component_for_every_seed()
++    {
++        for (ulong seed = 1; seed <= 60; seed++)
++        {
++            var s = CastSupport.NewCastSession(seed);
++            Assert.True(s.Relationships.IsConnected(s.State.World.Characters.Keys), $"seed {seed}: social network is split");
++        }
++    }
++
++    [Fact]
++    public void Household_members_are_family_and_colleagues_share_a_workplace()
++    {
++        var s = CastSupport.NewCastSession(17);
++        var chars = s.State.World.Characters;
++        foreach (var e in s.State.World.Relationships)
++        {
++            var a = chars[e.From];
++            var b = chars[e.To];
++            var sameHousehold = s.State.World.Profiles[a.Id].HouseholdId == s.State.World.Profiles[b.Id].HouseholdId;
++            Assert.Equal(sameHousehold, e.Kind == RelationshipKind.Family, "family <=> same household");
++            if (e.Kind == RelationshipKind.Colleague) Assert.Equal(a.WorkLocationId, b.WorkLocationId);
++        }
++    }
++
++    [Fact]
++    public void Family_ages_are_plausible()
++    {
++        for (ulong seed = 1; seed <= 40; seed++)
++        {
++            var s = CastSupport.NewCastSession(seed);
++            foreach (var e in s.State.World.Relationships.Where(e => e.Kind == RelationshipKind.Family))
++            {
++                var gap = Math.Abs(s.State.World.Characters[e.From].Age - s.State.World.Characters[e.To].Age);
++                Assert.True(gap <= 35, $"seed {seed}: family age gap {gap}");
++            }
++        }
++    }
++
++    [Fact]
++    public void Rivals_and_friends_exist_and_no_one_has_too_many_friends()
++    {
++        var kinds = new HashSet<RelationshipKind>();
++        for (ulong seed = 1; seed <= 30; seed++)
++        {
++            var s = CastSupport.NewCastSession(seed);
++            foreach (var e in s.State.World.Relationships) kinds.Add(e.Kind);
++            foreach (var id in s.State.World.Characters.Keys)
++                Assert.True(s.Relationships.Of(id, RelationshipKind.Friend).Count() <= 4, "friend cap");
++        }
++        Assert.True(kinds.Contains(RelationshipKind.Friend) && kinds.Contains(RelationshipKind.Rival) && kinds.Contains(RelationshipKind.Family) && kinds.Contains(RelationshipKind.Colleague));
++    }
++
++    [Fact]
++    public void Connect_rejects_duplicates_self_links_and_unknown_characters()
++    {
++        var s = CastSupport.NewCastSession(1);
++        Assert.False(s.Relationships.Connect("c_01", "c_01", RelationshipKind.Friend));
++        Assert.False(s.Relationships.Connect("c_01", "c_99", RelationshipKind.Friend));
++        var existing = s.State.World.Relationships[0];
++        Assert.False(s.Relationships.Connect(existing.From, existing.To, RelationshipKind.Rival));
++    }
++
++    [Fact]
++    public void Validator_rejects_one_way_and_dangling_relationships()
++    {
++        var s = CastSupport.NewCastSession(1);
++        s.State.World.Relationships.RemoveAt(0);
++        Assert.True(GameStateValidator.Validate(s.State).Any(e => e.Contains("no reverse edge")));
++
++        var t = CastSupport.NewCastSession(1);
++        t.State.World.Relationships.Add(new RelationshipEdge { From = "c_01", To = "ghost", Kind = RelationshipKind.Friend });
++        Assert.True(GameStateValidator.Validate(t.State).Any(e => e.Contains("unknown character")));
++    }
++}
+diff --git a/bad-deduction-phase1/tests/BadDeduction.Tests/SaveTests.cs b/bad-deduction-phase1/tests/BadDeduction.Tests/SaveTests.cs
+index 3b7403b..9593ba6 100644
+--- a/bad-deduction-phase1/tests/BadDeduction.Tests/SaveTests.cs
++++ b/bad-deduction-phase1/tests/BadDeduction.Tests/SaveTests.cs
+@@ -118,4 +118,51 @@ public sealed class SaveTests
+         var b = TestSupport.NewPopulatedSession(seed: 9);
+         Assert.Equal(SaveSystem.Serialize(a.State), SaveSystem.Serialize(b.State));
+     }
++
++    [Fact]
++    public void Generated_cast_survives_save_and_load_with_identical_state_hash()
++    {
++        var s = CastSupport.NewCastSession(77);
++        var path = Path.Combine(Path.GetTempPath(), "bd-cast-" + Guid.NewGuid().ToString("N") + ".json");
++        try
++        {
++            s.Save(path);
++            var loaded = GameSession.Load(path, TestSupport.LoadContent());
++            Assert.Equal(s.StateHash(), loaded.StateHash());
++            Assert.Equal(s.State.World.Relationships.Count, loaded.State.World.Relationships.Count);
++        }
++        finally { File.Delete(path); }
++    }
++
++    [Fact]
++    public void Version_1_saves_migrate_to_the_current_format()
++    {
++        var s = TestSupport.NewPopulatedSession(5);
++        var json = SaveSystem.Serialize(s.State);
++        var v1 = json
++            .Replace(",\"Profiles\":{},\"Schedules\":{},\"Relationships\":[]", "")
++            .Replace($"\"FormatVersion\":{SaveSystem.CurrentFormatVersion}", "\"FormatVersion\":1");
++        Assert.False(v1.Contains("Profiles"), "test setup: v1 JSON should not have Profiles");
++        var migrated = SaveSystem.Deserialize(v1);
++        Assert.Equal(0, migrated.World.Profiles.Count);
++        Assert.Equal(s.State.World.Characters.Count, migrated.World.Characters.Count);
++    }
++
++    [Fact]
++    public void Simulation_after_loading_a_cast_matches_the_uninterrupted_run()
++    {
++        var a = CastSupport.NewCastSession(31);
++        var b = CastSupport.NewCastSession(31);
++        TestSupport.Simulate(a, 40);
++        var path = Path.Combine(Path.GetTempPath(), "bd-cast2-" + Guid.NewGuid().ToString("N") + ".json");
++        try
++        {
++            TestSupport.Simulate(b, 20);
++            b.Save(path);
++            var resumed = GameSession.Load(path, TestSupport.LoadContent());
++            TestSupport.Simulate(resumed, 20);
++            Assert.Equal(a.StateHash(), resumed.StateHash());
++        }
++        finally { File.Delete(path); }
++    }
+ }
+diff --git a/bad-deduction-phase1/tests/BadDeduction.Tests/ScheduleTests.cs b/bad-deduction-phase1/tests/BadDeduction.Tests/ScheduleTests.cs
+new file mode 100644
+index 0000000..01c358e
+--- /dev/null
++++ b/bad-deduction-phase1/tests/BadDeduction.Tests/ScheduleTests.cs
+@@ -0,0 +1,140 @@
++using BadDeduction.Characters;
++using BadDeduction.Core;
++using BadDeduction.Tests.Harness;
++using BadDeduction.World;
++
++namespace BadDeduction.Tests;
++
++public sealed class ScheduleTests
++{
++    [Fact]
++    public void Every_generated_schedule_tiles_the_day_and_is_travel_feasible()
++    {
++        for (ulong seed = 1; seed <= 60; seed++)
++        {
++            var s = CastSupport.NewCastSession(seed);
++            foreach (var (id, schedule) in s.State.World.Schedules)
++            {
++                var errors = ScheduleSystem.Check(id, s.State.World.Characters[id].HomeLocationId, schedule, s.Content);
++                Assert.Equal(0, errors.Count, $"seed {seed}: {string.Join("; ", errors)}");
++            }
++        }
++    }
++
++    [Fact]
++    public void Workers_are_at_work_during_their_shift_and_asleep_at_home_at_night()
++    {
++        var s = CastSupport.NewCastSession(21);
++        foreach (var c in s.State.World.Characters.Values)
++        {
++            var occ = s.Content.GetOccupation(c.OccupationId);
++            for (var day = 1; day <= 7; day++)
++            {
++                var schedule = s.State.World.Schedules[c.Id];
++                var at3 = s.Schedules.BlockAt(c.Id, GameTime.At(day, 3));
++                Assert.Equal(c.HomeLocationId, at3.LocationId);
++                Assert.Equal(Activity.Sleeping, at3.Activity);
++
++                var midShift = GameTime.At(day, (occ.ShiftStartHour + occ.ShiftEndHour) / 2);
++                var block = s.Schedules.BlockAt(c.Id, midShift);
++                if (schedule.IsDayOff(day)) Assert.True(block.Activity != Activity.Working, "no work on a day off");
++                else
++                {
++                    Assert.Equal(c.WorkLocationId, block.LocationId);
++                    Assert.Equal(Activity.Working, block.Activity);
++                }
++            }
++        }
++    }
++
++    [Fact]
++    public void Police_have_no_day_off_and_the_station_is_always_staffed_at_midday_and_evening()
++    {
++        for (ulong seed = 1; seed <= 25; seed++)
++        {
++            var s = CastSupport.NewCastSession(seed);
++            foreach (var c in s.State.World.Characters.Values.Where(c => c.Kind == CharacterKind.Police))
++                Assert.Equal(-1, s.State.World.Schedules[c.Id].DayOffIndex);
++
++            foreach (var hour in new[] { 10, 12, 16, 20 })
++            {
++                var at = GameTime.At(3, hour);
++                var staffed = s.State.World.Characters.Values.Any(c =>
++                    c.Kind == CharacterKind.Police && s.Schedules.BlockAt(c.Id, at).LocationId == "loc_guard_station");
++                Assert.True(staffed, $"seed {seed}: nobody at the guard station at {hour}:00");
++            }
++        }
++    }
++
++    [Fact]
++    public void Some_civilians_take_a_day_off_within_the_week_and_go_out_somewhere()
++    {
++        var s = CastSupport.NewCastSession(13);
++        var civilians = s.State.World.Characters.Values.Where(c => c.Kind == CharacterKind.Civilian).ToList();
++        Assert.True(civilians.All(c => s.State.World.Schedules[c.Id].DayOffIndex is >= 0 and <= 6));
++        Assert.True(civilians.Select(c => s.State.World.Schedules[c.Id].DayOffIndex).Distinct().Count() >= 3, "days off should be spread out");
++        Assert.True(civilians.Any(c => s.State.World.Schedules[c.Id].DayOff.Any(b => b.Activity == Activity.Socializing)));
++    }
++
++    [Fact]
++    public void Characters_start_where_their_schedule_says_at_run_start()
++    {
++        var s = CastSupport.NewCastSession(2);
++        var now = new GameTime(s.State.TotalMinutes);
++        foreach (var c in s.State.World.Characters.Values)
++        {
++            var block = s.Schedules.BlockAt(c.Id, now);
++            Assert.Equal(block.LocationId, c.CurrentLocationId);
++            Assert.Equal(block.Activity, c.Activity);
++        }
++    }
++
++    [Fact]
++    public void Schedule_validation_catches_bad_schedules()
++    {
++        var s = CastSupport.NewCastSession(2);
++        var id = s.State.World.Characters.Keys.First();
++        var home = s.State.World.Characters[id].HomeLocationId;
++        Schedule Clone() => System.Text.Json.JsonSerializer.Deserialize<Schedule>(System.Text.Json.JsonSerializer.Serialize(s.State.World.Schedules[id]))!;
++
++        var gap = Clone();
++        gap.Workday[1].StartMinute += 5;
++        Assert.True(ScheduleSystem.Check(id, home, gap, s.Content).Any(e => e.Contains("gap")));
++
++        var wrongEnd = Clone();
++        wrongEnd.Workday[^1].LocationId = "loc_church";
++        Assert.True(ScheduleSystem.Check(id, home, wrongEnd, s.Content).Any(e => e.Contains("end where it starts")));
++
++        var ghost = Clone();
++        ghost.Workday[0].LocationId = "loc_nowhere";
++        Assert.True(ScheduleSystem.Check(id, home, ghost, s.Content).Any(e => e.Contains("unknown location")));
++
++        // Teleporting: a 1-minute stop far from the next place cannot be travelled in time.
++        var tooShort = Clone();
++        var work = tooShort.Workday.First(b => b.Activity == Activity.Working);
++        var idx = tooShort.Workday.IndexOf(work);
++        work.EndMinute = work.StartMinute + 1;
++        tooShort.Workday[idx + 1].StartMinute = work.EndMinute;
++        Assert.True(ScheduleSystem.Check(id, home, tooShort, s.Content).Any(e => e.Contains("too short to travel")));
++    }
++
++    [Fact]
++    public void Workers_only_leave_after_their_shift_has_ended()
++    {
++        for (ulong seed = 1; seed <= 30; seed++)
++        {
++            var s = CastSupport.NewCastSession(seed);
++            foreach (var c in s.State.World.Characters.Values)
++            {
++                var occ = s.Content.GetOccupation(c.OccupationId);
++                var blocks = s.State.World.Schedules[c.Id].Workday;
++                var i = blocks.FindIndex(b => b.Activity == Activity.Working);
++                var work = blocks[i];
++                var next = blocks[i + 1];
++                var departure = work.EndMinute - s.Content.TravelMinutes(work.LocationId, next.LocationId);
++                Assert.True(work.StartMinute <= occ.ShiftStartHour * 60, $"seed {seed}: {c.Id} arrives late");
++                Assert.True(departure >= occ.ShiftEndHour * 60, $"seed {seed}: {c.Id} leaves work at {departure} before shift end");
++            }
++        }
++    }
++}
+diff --git a/bad-deduction-phase1/tests/BadDeduction.Tests/TestSupport.cs b/bad-deduction-phase1/tests/BadDeduction.Tests/TestSupport.cs
+index a42e4aa..5de110d 100644
+--- a/bad-deduction-phase1/tests/BadDeduction.Tests/TestSupport.cs
++++ b/bad-deduction-phase1/tests/BadDeduction.Tests/TestSupport.cs
+@@ -51,3 +51,14 @@ internal static class TestSupport
+         }
+     }
+ }
++
++internal static class CastSupport
++{
++    /// <summary>A fresh run with a generated cast (17 civilians + 5 police by default).</summary>
++    public static GameSession NewCastSession(ulong seed = 42, CastSpec? spec = null)
++    {
++        var s = GameSession.NewRun(seed, Campaign.Lumiel, Difficulty.Medium, TestSupport.LoadContent());
++        s.Cast.Generate(spec ?? new CastSpec());
++        return s;
++    }
++}
+-- 
+2.43.0
+
