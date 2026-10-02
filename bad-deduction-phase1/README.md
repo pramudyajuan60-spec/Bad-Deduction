@@ -11,7 +11,7 @@ that emerge from the simulation instead of a scripted solution.
 
 ## Status
 
-**Phases 1-4 complete.**
+**Phases 1-5 complete.**
 * Phase 1 (Foundation): deterministic RNG, game time, event bus + causal world-event log, versioned
   save/load with state hashing, location content, truth-vs-player-view separation.
 * Phase 2 (Characters): seeded cast generation (`session.Cast.Generate(new CastSpec())` → 17 civilians
@@ -28,7 +28,12 @@ that emerge from the simulation instead of a scripted solution.
   counts, contact-gated rumor spread (telephone game), and a knowledge-gated player journal.
   Save format v4.
 
-129 tests. No presentation layer yet (Phase 11).
+* Phase 5 (World simulation): `session.Simulate` — schedule-driven routines with two live tiers
+  (Spotlight 1-minute / Near 15-minute; Background reserved), travel over timed edges with persisted
+  in-progress trips, `character.departed`/`character.moved`/`character.activity_changed` events, and
+  arrival/departure witnessing through the Phase 4 knowledge gate. Save format v5.
+
+161 tests. No presentation layer yet (Phase 11).
 
 ## Layout
 

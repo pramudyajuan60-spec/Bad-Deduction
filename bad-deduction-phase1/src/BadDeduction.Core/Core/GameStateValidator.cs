@@ -34,6 +34,7 @@ public static class GameStateValidator
 
         errors.AddRange(ValidateCast(state));
         errors.AddRange(ValidateCognition(state));
+        errors.AddRange(ValidateTravel(state));
 
         // Event log
         var log = state.EventLog;
@@ -106,6 +107,33 @@ public static class GameStateValidator
         }
         foreach (var (from, to) in seen)
             if (!seen.Contains((to, from))) errors.Add($"Relationship {from}->{to} has no reverse edge.");
+        return errors;
+    }
+
+    private static IEnumerable<string> ValidateTravel(GameState state)
+    {
+        var errors = new List<string>();
+        var w = state.World;
+        foreach (var (id, t) in w.ActiveTravels)
+        {
+            if (!w.Characters.TryGetValue(id, out var c))
+            {
+                errors.Add($"Travel exists for unknown character '{id}'.");
+                continue;
+            }
+            if (t.CharacterId != id) errors.Add($"Travel filed under '{id}' belongs to '{t.CharacterId}'.");
+            if (!w.Locations.ContainsKey(t.FromLocationId)) errors.Add($"Travel of '{id}' starts at unknown location '{t.FromLocationId}'.");
+            if (!w.Locations.ContainsKey(t.ToLocationId)) errors.Add($"Travel of '{id}' ends at unknown location '{t.ToLocationId}'.");
+            if (t.FromLocationId == t.ToLocationId) errors.Add($"Travel of '{id}' goes nowhere.");
+            if (t.DepartureMinute < 0) errors.Add($"Travel of '{id}' has a negative departure time.");
+            if (t.ArrivalMinute < t.DepartureMinute) errors.Add($"Travel of '{id}' arrives before it departs.");
+            if (t.DepartureEventId < 1) errors.Add($"Travel of '{id}' has no departure event.");
+            if (c.Activity != Activity.Traveling) errors.Add($"Character '{id}' has an active trip but is not Traveling.");
+            if (!c.IsAlive) errors.Add($"Dead character '{id}' has an active trip.");
+        }
+        foreach (var (id, c) in w.Characters)
+            if (c.IsAlive && c.Activity == Activity.Traveling && !w.ActiveTravels.ContainsKey(id))
+                errors.Add($"Character '{id}' is Traveling with no active trip.");
         return errors;
     }
 

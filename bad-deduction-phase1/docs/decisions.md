@@ -228,3 +228,76 @@ clone. Game content about characters' private lives is not a credential, but the
 pattern that secret scanners and global gitignores match. The file is therefore `data/character_secrets.json`
 and the credential ignore rule is untouched. Rule of thumb: never name game data after a credential pattern,
 and always verify a change on a fresh clone, not only in the working tree.
+
+---
+
+# Phase 5 — World simulation
+
+```
+WorldSimulation (session.Simulate) ── the world tick
+  Advance ── wraps TimeSystem.Advance minute-by-minute, then runs the sim for that minute
+  TierOf ── Spotlight (player's location, 1-min) / Near (everyone else, 15-min) / Background (reserved)
+  EvaluateRoutine ── schedule blocks -> departures (blockEnd - travelMinutes) -> activity
+  TravelState (on WorldState.ActiveTravels) ── persisted in-progress trips
+  character.departed -> character.moved (CausedBy-linked) -> character.activity_changed
+  witnessing ── departures seen at the origin, arrivals at the destination, via Cognition.Perceive
+DefaultRoutine ── home-centric fallback for characters without an authored schedule
+```
+
+## ADR-022 — Two live tiers, one reserved seam
+`SimulationTier.Spotlight` (characters sharing the player's location) evaluates routine decisions
+every sim-minute; `SimulationTier.Near` (everyone else) every 15 sim-minutes, so background
+characters react to schedule changes up to 14 minutes late — an honest, documented cost of the
+coarser tier. `SimulationTier.Background` (daily cadence) exists in the enum and the cadence map
+but is unassigned at the 22-character scale: no off-slice population exists yet, and inventing one
+would be fake granularity. Travel completion is tier-independent (a per-minute countdown), so
+arrivals stay minute-exact for every tier and the tier difference is purely decision latency,
+which tests pin down (1-minute vs 15-minute reaction).
+
+## ADR-023 — Simulate.Advance wraps Time.Advance; Time.Advance stays sim-free
+The simulation does NOT subscribe to `MinuteElapsed`. `WorldSimulation.Advance(n)` advances
+`TimeSystem` one minute at a time and runs the tick after each minute, so day/hour boundaries,
+social drift and memory decay all fire in their established order before the sim sees the new
+minute. `Time.Advance` keeps its Phase 1 contract — raw time with no characters moving under it —
+which existing systems and tests (notably the cognition "decay is silent" test) rely on. The game
+loop (Phase 11) calls `session.Simulate.Advance`; anything calling `session.Time.Advance` directly
+opts out of the living world deliberately.
+
+## ADR-024 — Travel takes real minutes and survives save/load
+Departures follow ADR-008: a block's `Start` is the arrival deadline, so the sim leaves
+`TravelMinutes(here, next)` before the next block starts; displaced or late characters head
+straight for the current block. The in-progress trip (`TravelState`: from/to, departure/arrival
+minutes, departure event id) is persisted on `WorldState.ActiveTravels`, so saving mid-travel and
+continuing is hash-identical to an uninterrupted run — pinned by a test. All location changes go
+through `WorldService.MoveCharacter` (validation + `character.moved` preserved). The sim uses no
+RNG at all: every decision is a pure function of state, content and time, so no new RNG stream
+was needed; personality flavor lives in the generated schedules (Phase 2), not in movement.
+
+## ADR-025 — Departures and arrivals are witnessed where they happen
+Starting a trip records `character.departed` (origin, from/to, departure/arrival minutes) and the
+living characters at the origin — traveler included — `Perceive` it immediately. On arrival,
+`character.moved` is recorded with `CausedBy` pointing at the departure, and the traveler plus
+everyone at the destination `Perceive` it. The dead perceive nothing. Witnessing lives in the
+simulation, not in `WorldService.MoveCharacter`, so hand-driven moves (tests, later UI) stay quiet
+and existing move semantics are untouched. Knowledge still flows only through the Phase 4 gate.
+
+## ADR-026 — Event-volume policy
+`character.activity_changed` is logged only on actual transitions (departure, arrival, block change),
+never per minute; daily decay-style silence applies. A trip therefore costs exactly: one
+`character.departed`, one `character.moved`, two activity transitions, and one memory per witness —
+all of them real happenings a debugger or timeline wants to see.
+
+## Save format v5
+Adds `World.ActiveTravels`. Migration v4→v5 adds the empty table (older saves could not have been
+mid-travel). The validator checks: known character/location references, id match, no nowhere-trips,
+non-negative times, arrival after departure, a recorded departure event, and the two-way invariant
+(active trip ⟺ Traveling and alive).
+
+## Deferred / known limits
+* The player character is never simulated (a human drives them in Phase 11); in headless runs they
+  idle where placed but still witness and journal like anyone present.
+* Schedule-less characters run a home-centric `DefaultRoutine` (no travel); it is a fallback for
+  hand-built worlds, not the plausibility showcase — the generated cast carries real schedules.
+* Interruptions (being stopped, detained, lured away) are Phase 6+; the sim currently always
+  follows the schedule, recovering by heading for the current block when displaced.
+* No memory consolidation/pruning caps yet (carried over from Phase 4).

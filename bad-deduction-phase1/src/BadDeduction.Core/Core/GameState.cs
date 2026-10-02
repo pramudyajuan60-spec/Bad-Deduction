@@ -47,6 +47,6 @@ public sealed class GameState
     /// <summary>Phase 4: what characters know, remember and believe (plain data; see CognitionService).</summary>
     public Cognition.CognitionState Cognition { get; set; } = new();
 
-    // Phases 5+ add: Rumors (network spread is Phase 4; done), Evidence, CrimeScenes,
-    // Police, Hypotheses, Surveillance, Timeline. Each addition bumps SaveSystem.CurrentFormatVersion.
+    // Phases 6+ add: Evidence, CrimeScenes, Police, Hypotheses, Surveillance, Timeline.
+    // Each addition bumps SaveSystem.CurrentFormatVersion.
 }

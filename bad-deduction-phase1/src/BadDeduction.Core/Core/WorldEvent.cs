@@ -42,6 +42,8 @@ public static class WorldEventTypes
     public const string RunStarted = "run.started";
     public const string DayStarted = "time.day_started";
     public const string CharacterMoved = "character.moved";
+    public const string CharacterDeparted = "character.departed";
+    public const string ActivityChanged = "character.activity_changed";
     public const string RelationshipChanged = "social.relationship_changed";
     public const string MemoryRecorded = "cognition.memory_recorded";
     public const string RumorSpread = "cognition.rumor_spread";

@@ -21,4 +21,8 @@ public sealed class WorldState
     public Dictionary<string, CharacterProfile> Profiles { get; set; } = new();
     public Dictionary<string, Schedule> Schedules { get; set; } = new();
     public List<RelationshipEdge> Relationships { get; set; } = new();
+
+    // Phase 5. Trips in progress, keyed by character id. Persisted so a save mid-travel
+    // continues the trip identically after load (see WorldSimulation).
+    public Dictionary<string, TravelState> ActiveTravels { get; set; } = new();
 }

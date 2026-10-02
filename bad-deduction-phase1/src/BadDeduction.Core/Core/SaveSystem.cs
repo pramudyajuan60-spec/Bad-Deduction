@@ -26,7 +26,7 @@ public sealed class SaveEnvelope
 public static class SaveSystem
 {
     public const string GameId = "BadDeduction";
-    public const int CurrentFormatVersion = 4;
+    public const int CurrentFormatVersion = 5;
 
     /// <summary>Migrations keyed by the version they upgrade FROM (operate on the raw JSON tree).</summary>
     private static readonly Dictionary<int, Action<JsonNode>> Migrations = new()
@@ -66,6 +66,13 @@ public static class SaveSystem
                 CognitionRng = DeterministicRandom.Derive(seed, "cognition.memory").Snapshot(),
             };
             state["Cognition"] = JsonSerializer.SerializeToNode(cognition, Compact);
+        },
+        // v4 -> v5 (Phase 5): worlds gain the in-progress travel table. Old saves get an empty
+        // table: nobody was mid-travel in a format that could not represent it.
+        [4] = root =>
+        {
+            if (root["State"]?["World"] is not JsonObject world) return;
+            world["ActiveTravels"] ??= new JsonObject();
         },
     };
 

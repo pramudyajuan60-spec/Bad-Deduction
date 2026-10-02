@@ -24,6 +24,13 @@ public sealed class GameSession
     public ComplianceEvaluator Compliance { get; }
     public CognitionService Cognition { get; }
     public CastGenerator Cast { get; }
+
+    /// <summary>
+    /// Phase 5: the world tick. Advance time through here (not <see cref="Time"/>) when the
+    /// world should live: <c>Simulate.Advance(n)</c> wraps <see cref="TimeSystem.Advance"/>
+    /// minute by minute. <see cref="Time"/> stays sim-free for raw time jumps.
+    /// </summary>
+    public WorldSimulation Simulate { get; }
     public PlayerView View { get; }
     public DebugAccess Debug { get; }
 
@@ -44,6 +51,7 @@ public sealed class GameSession
         Compliance = new ComplianceEvaluator(state, Social);
         Cognition = new CognitionService(state, Events, Relationships);
         Cast = new CastGenerator(state, content, World, Relationships);
+        Simulate = new WorldSimulation(state, Time, Events, World, Cognition, content);
         View = new PlayerView(state);
         Debug = new DebugAccess(state);
         Rng = new DeterministicRandom(state.SimRng);
