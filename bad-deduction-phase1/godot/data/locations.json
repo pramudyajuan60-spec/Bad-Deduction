@@ -1,0 +1,98 @@
+{
+  // Provisional location graph transcribed from "Desain mapkota.png".
+  // Node names/kinds come from the map legend; connections and travel minutes are inferred from the
+  // drawn routes and are meant to be tuned by the designer. Connections are undirected.
+  "locations": [
+    {
+      "id": "loc_central_market", "name": "Central City / Market", "visibility": "Public",
+      "description": "Merchants and civilians; information exchange, rumors, major social hub.",
+      "tags": ["social_hub", "rumors"],
+      "connections": [
+        { "to": "loc_residential", "minutes": 8 },
+        { "to": "loc_city_hall", "minutes": 6 },
+        { "to": "loc_guard_station", "minutes": 7 },
+        { "to": "loc_tavern", "minutes": 5 },
+        { "to": "loc_warehouse", "minutes": 10 },
+        { "to": "loc_church", "minutes": 9 }
+      ]
+    },
+    {
+      "id": "loc_residential", "name": "Residential District", "visibility": "Private",
+      "description": "Houses and apartments; NPC homes, private conversations, daily routines.",
+      "tags": ["homes"],
+      "connections": [
+        { "to": "loc_church", "minutes": 10 },
+        { "to": "loc_city_hall", "minutes": 9 }
+      ]
+    },
+    {
+      "id": "loc_city_hall", "name": "Government / City Hall", "visibility": "Public",
+      "description": "Administration, officials, records and permits, political information.",
+      "tags": ["records", "investigation"],
+      "connections": [
+        { "to": "loc_guard_station", "minutes": 5 }
+      ]
+    },
+    {
+      "id": "loc_church", "name": "Church / Sanctuary", "visibility": "Public",
+      "description": "Religious architecture, healing area, priests. No explicit faction alignment.",
+      "tags": ["sanctuary"],
+      "connections": [
+        { "to": "loc_forest", "minutes": 12 }
+      ]
+    },
+    {
+      "id": "loc_warehouse", "name": "Abandoned Warehouse District", "visibility": "Private",
+      "description": "Dark warehouses, criminal activity, secret meetings, hidden evidence.",
+      "tags": ["hidden_evidence", "crime_scene_candidate"],
+      "connections": [
+        { "to": "loc_guard_station", "minutes": 9 },
+        { "to": "loc_harbor", "minutes": 8 },
+        { "to": "loc_underground", "minutes": 7 }
+      ]
+    },
+    {
+      "id": "loc_tavern", "name": "Tavern / Inn", "visibility": "Public",
+      "description": "Social interaction hub: rumors, drinking tables, travelers.",
+      "tags": ["social_hub", "rumors"],
+      "connections": [
+        { "to": "loc_cemetery", "minutes": 8 },
+        { "to": "loc_forest", "minutes": 14 }
+      ]
+    },
+    {
+      "id": "loc_guard_station", "name": "Guard / Police Station", "visibility": "Public",
+      "description": "Investigation, evidence storage, interrogation, city security, crime records.",
+      "tags": ["investigation", "evidence_storage", "interrogation"],
+      "connections": []
+    },
+    {
+      "id": "loc_forest", "name": "Forest / Outskirts", "visibility": "Private",
+      "description": "Wild edge of the city; few witnesses.",
+      "tags": ["outskirts", "crime_scene_candidate"],
+      "connections": [
+        { "to": "loc_cemetery", "minutes": 8 }
+      ]
+    },
+    {
+      "id": "loc_cemetery", "name": "Cemetery", "visibility": "Private",
+      "description": "Graves and memorials, mysterious atmosphere, investigation location, hidden clues.",
+      "tags": ["investigation", "hidden_evidence"],
+      "connections": []
+    },
+    {
+      "id": "loc_underground", "name": "Underground / Secret Network", "visibility": "Secret",
+      "description": "Tunnels and hidden rooms; secret paths and clandestine meetings.",
+      "tags": ["secret_route", "hidden_evidence"],
+      "connections": [
+        { "to": "loc_harbor", "minutes": 6 }
+      ]
+    },
+    {
+      "id": "loc_harbor", "name": "Harbor", "visibility": "Public",
+      "description": "Docks. Drawn faintly on the map; confirm whether it is in scope for the vertical slice.",
+      "tags": ["out_of_slice_candidate"],
+      "connections": []
+    }
+  ]
+}

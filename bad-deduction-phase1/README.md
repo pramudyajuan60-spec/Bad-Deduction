@@ -11,7 +11,7 @@ that emerge from the simulation instead of a scripted solution.
 
 ## Status
 
-**Phases 1-10 complete.**
+**Phases 1-11 complete.**
 * Phase 1 (Foundation): deterministic RNG, game time, event bus + causal world-event log, versioned
   save/load with state hashing, location content, truth-vs-player-view separation.
 * Phase 2 (Characters): seeded cast generation (`session.Cast.Generate(new CastSpec())` → 17 civilians
@@ -70,8 +70,18 @@ that emerge from the simulation instead of a scripted solution.
   only — never WorldTruth), and interview deception (genius holders may lie about whereabouts
   near known crimes; the lie is recorded normally so Genius contradiction detection can catch it).
   Save format v9.
+* Phase 11 (UI/UX): `godot/` — Godot 4.7 (.NET) presentation layer: `GameController`
+  autoload owns one `GameSession`; ten panels per the UI/UX sheet (World, NPC inspect +
+  trust dials, Evidence, Timeline + compare statements, NPC memory, social graph,
+  dialogue + response deltas, investigation board) plus New Run and Resolution screens.
+  Playable Day 1–7 loop with the Mock provider: travel, talk, interview/interrogate,
+  examine evidence, pin hypotheses, time controls, save/load. UI truth-gating rule
+  enforced (no script touches `State.Truth`/`DebugAccess`/`WorldTruth`; see
+  `godot/docs/UI_RULES.md`). 1897 "The Veiled City" skin. No save-format change.
 
-304 tests. No presentation layer yet (Phase 11).
+304 tests. Presentation layer: `godot/` (Godot 4.7 .NET project, 10 panels, playable
+Day 1–7 loop with the Mock provider — requires the Godot 4.7.2-stable .NET editor;
+see `godot/README.md`).
 
 ## Layout
 
@@ -81,6 +91,7 @@ src/BadDeduction.Core/     engine-free simulation library (net8.0)
 tests/BadDeduction.Tests/  dependency-free test runner
 data/                      data-driven content (locations, occupations, goals, character secrets, names, crimes)
 docs/                      audit, roadmap, decisions
+godot/                     Godot 4.7 .NET presentation layer (scenes/, scripts/, data/ snapshot)
 ```
 
 ## Build and test

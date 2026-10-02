@@ -66,6 +66,6 @@ public sealed class GameState
     /// </summary>
     public HiddenAgendaState Agenda { get; set; } = new();
 
-    // Phase 11+ adds: presentation.
+    // Phase 12: vertical-slice balance (bot playthrough metrics).
     // Each addition bumps SaveSystem.CurrentFormatVersion.
 }

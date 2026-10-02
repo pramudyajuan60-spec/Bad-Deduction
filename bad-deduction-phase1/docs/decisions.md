@@ -713,3 +713,51 @@ kind/status values, attribution crime references, and non-zero RNG stream.
 * Unsealing scenes and full case resolution (trial/win/lose) are future work.
 * The interrogation-pressure effect of higher alert levels is currently expressed through
   doubled evaluation nudges; direct pressure mechanics belong to a future pass.
+
+## Phase 11 — Godot 4 presentation layer
+
+### ADR-052 — Godot 4.7 (.NET) project layout
+`godot/` holds a standard Godot 4 project: `project.godot` (main scene
+`res://scenes/Main.tscn`, autoload `Game`), `BadDeduction.Godot.csproj` targeting
+net8.0 with `Godot.NET.Sdk` 4.7.2 and a `<ProjectReference>` to
+`../src/BadDeduction.Core`. The editor version must match the SDK (4.7.x); the
+`.NET`-flavored editor build is required (the plain editor cannot compile C#).
+`data/*.json` is a committed snapshot copy of `../data/` — one source of truth
+lives at repo root; the copy exists because Godot exports pack `res://`.
+
+### ADR-053 — UI truth-gating rule
+UI scripts may read the session only through sanctioned services
+(`View`, `Cognition`, `Social`, `Relationships`, `Investigate`, `Crime`,
+`Dialogue`, `Simulate`, `Police`, `World`, `Content`, `Cast`, `Agenda` for the
+player's OWN objectives). `State.Truth`, `DebugAccess`, `WorldTruth` and
+`HiddenRole` are forbidden in `godot/scripts` (checked by grep). Gameplay state
+(`State.World.Characters`, `State.Police.Alert`) is not truth and may be read
+where no service accessor exists. The player's side is known via
+`GameMeta.Campaign`, chosen at New Run.
+
+### ADR-054 — Panel → service mapping
+World→View/World/Content/Agenda; NPC inspect→View/Social/Investigate;
+Evidence→Crime/Investigate/View; Timeline→View/Events/Investigate;
+Memory→Cognition/View; Graph→Social/View (custom `_Draw`); Dialogue→Dialogue
+pipeline; Board→Crime/Investigate/View. Each panel implements `IPanel.Refresh()`;
+`Main` switches and refreshes.
+
+### ADR-055 — Reliability % is knowledge-based
+The sheet's "reliability %" is NOT the hidden `Authenticity` (that would leak
+truth). It is `clamp(40 + 15×witnesses + 10 if you found it, 5, 95)` —
+corroboration-based. Interpretations come from hypotheses referencing the item.
+
+### ADR-056 — What "playable" covers (and doesn't)
+Playable = New Run (seed/campaign/difficulty) → travel, talk, interview/
+interrogate, examine evidence, pin/attach hypotheses, time controls (+1h/+8h/
+Next Day), save/load, Day-1 murder, Resolution screen of player-known facts at
+Day 8, all with the Mock provider. Simplified: node-link graph spokes (no force
+layout), corkboard as hypothesis cards (no draggable strings), letter
+placeholders for portraits, instant player travel, dossier-style NPC memory
+panel. Real LLM providers plug into `IAIProvider`; win/lose stays out of scope.
+
+### ADR-057 — Headless smoke test
+`godot --headless --path . -- --autotest` starts a seeded run, refreshes every
+panel, runs a dialogue exchange and an interview, advances 3 days, saves, and
+quits — any script error fails the run. This is the closest CI gets to "playable"
+without a display.

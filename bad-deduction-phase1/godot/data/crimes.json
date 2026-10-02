@@ -1,0 +1,44 @@
+{
+  // Crime definitions (Phase 7). Murder is the first-class incident type; arson is a variant
+  // that can produce victims and fire evidence. The slice incident is data, not code.
+  //
+  // victimKinds: which CharacterKind values may be picked as victim (empty = any kind).
+  //   The player character is NEVER eligible, whatever this list says.
+  // locationTags: victims are preferred at locations carrying one of these tags; when no living
+  //   non-player candidate is at a tagged location, any living non-player may be picked.
+  // fatal: whether the victim dies in the incident (murder) or survives it (arson).
+  // minDiscoveryDelayMinutes: nobody can discover the scene before this long has passed.
+  // evidenceTemplates: each template spawns exactly one Evidence item at generation time.
+  //   Authenticity is drawn from the weights (authentic / false / misleading) and is IMMUTABLE
+  //   once set: false evidence can never become true.
+  "crimes": [
+    {
+      "id": "murder",
+      "label": "Murder",
+      "description": "A killing, made to look like something else — or not.",
+      "victimKinds": ["Civilian"],
+      "fatal": true,
+      "locationTags": ["crime_scene_candidate"],
+      "minDiscoveryDelayMinutes": 120,
+      "evidenceTemplates": [
+        { "id": "murder_weapon",     "label": "Bloodied letter opener",   "summary": "A letter opener with blood on the blade, dropped behind the furniture.", "authenticWeight": 70, "falseWeight": 10, "misleadingWeight": 20 },
+        { "id": "torn_cloth",        "label": "Torn coat fragment",       "summary": "A fragment of dark coat cloth, caught on a nail by the door.",            "authenticWeight": 60, "falseWeight": 15, "misleadingWeight": 25 },
+        { "id": "threatening_letter","label": "Unsigned threatening letter","summary": "A letter threatening the victim — unsigned, and oddly clean.",          "authenticWeight": 40, "falseWeight": 30, "misleadingWeight": 30 }
+      ]
+    },
+    {
+      "id": "arson",
+      "label": "Arson",
+      "description": "A deliberately set fire. The victim survives — and remembers.",
+      "victimKinds": ["Civilian"],
+      "fatal": false,
+      "locationTags": ["crime_scene_candidate"],
+      "minDiscoveryDelayMinutes": 60,
+      "evidenceTemplates": [
+        { "id": "accelerant_traces", "label": "Smell of lamp oil",        "summary": "Lamp-oil smell at the fire's origin point: no accident.",                "authenticWeight": 75, "falseWeight": 5,  "misleadingWeight": 20 },
+        { "id": "burnt_ledger",      "label": "Half-burnt ledger page",   "summary": "A ledger page, half-burnt, with one name circled.",                      "authenticWeight": 50, "falseWeight": 20, "misleadingWeight": 30 },
+        { "id": "dropped_lantern",   "label": "Dropped lantern",          "summary": "A lantern, dropped and still warm — its owner claims they were elsewhere.", "authenticWeight": 55, "falseWeight": 25, "misleadingWeight": 20 }
+      ]
+    }
+  ]
+}

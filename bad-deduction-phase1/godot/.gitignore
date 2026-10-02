@@ -1,0 +1,5 @@
+# Godot import cache and build outputs — never commit these.
+.godot/
+bin/
+obj/
+# Godot editor per-user files
