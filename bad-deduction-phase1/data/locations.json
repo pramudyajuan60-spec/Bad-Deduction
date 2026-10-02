@@ -42,6 +42,15 @@
       ]
     },
     {
+      "id": "loc_cathedral", "name": "Saint Velmont Cathedral", "visibility": "Public",
+      "description": "The great cathedral of Saint Velmont; the vertical slice's arson target.",
+      "tags": ["sanctuary", "crime_scene_candidate", "investigation"],
+      "connections": [
+        { "to": "loc_church", "minutes": 4 },
+        { "to": "loc_central_market", "minutes": 7 }
+      ]
+    },
+    {
       "id": "loc_warehouse", "name": "Abandoned Warehouse District", "visibility": "Private",
       "description": "Dark warehouses, criminal activity, secret meetings, hidden evidence.",
       "tags": ["hidden_evidence", "crime_scene_candidate"],

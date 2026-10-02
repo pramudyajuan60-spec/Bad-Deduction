@@ -244,7 +244,7 @@ public sealed class HiddenAgendaService : IDeceptionHook
         var crime = _state.Crime.Crimes[hot];
         var listeners = ContactListeners(holderId, crime.IncidentEventId);
         if (listeners.Count == 0) return false;
-        var patsy = PickLiving(holderId);
+        var patsy = PickLiving(holderId, listeners[0]);
         _cognition.TellRumor(holderId, listeners[0], crime.IncidentEventId);
         _social.Adjust(listeners[0], patsy,
             new SocialDelta(Suspicion: AgendaRules.DeflectSuspicionDelta), "deflecting whispers");

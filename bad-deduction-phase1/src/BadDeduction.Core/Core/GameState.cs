@@ -66,6 +66,8 @@ public sealed class GameState
     /// </summary>
     public HiddenAgendaState Agenda { get; set; } = new();
 
-    // Phase 12: vertical-slice balance (bot playthrough metrics).
+    // Phase 12: vertical slice complete — the roadmap is done. There are no future
+    // phases left; deferred items (chase, firearms/combat, transactions, Harbor,
+    // Underground, multi-district) stay deferred by design, not by omission.
     // Each addition bumps SaveSystem.CurrentFormatVersion.
 }

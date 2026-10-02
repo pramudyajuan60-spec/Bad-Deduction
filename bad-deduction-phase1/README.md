@@ -11,7 +11,7 @@ that emerge from the simulation instead of a scripted solution.
 
 ## Status
 
-**Phases 1-11 complete.**
+**Phases 1-12 complete — roadmap done.**
 * Phase 1 (Foundation): deterministic RNG, game time, event bus + causal world-event log, versioned
   save/load with state hashing, location content, truth-vs-player-view separation.
 * Phase 2 (Characters): seeded cast generation (`session.Cast.Generate(new CastSpec())` → 17 civilians
@@ -78,8 +78,14 @@ that emerge from the simulation instead of a scripted solution.
   examine evidence, pin hypotheses, time controls, save/load. UI truth-gating rule
   enforced (no script touches `State.Truth`/`DebugAccess`/`WorldTruth`; see
   `godot/docs/UI_RULES.md`). 1897 "The Veiled City" skin. No save-format change.
+* Phase 12 (Vertical slice): `src/BadDeduction.Core/Slice/` — "The Burning at Saint
+  Velmont": 22-character cast (15 civilians + 5 police), 8 connected locations,
+  Day-1 fatal cathedral arson; `SliceBot` headless player; 7 pacing beats as checks;
+  balance metrics over 200 seeds (98.5% solvable, 0 knowledge violations, Easy/Genius
+  contradiction gap, ~29 s). Slice bible: [`docs/VERTICAL_SLICE.md`](docs/VERTICAL_SLICE.md).
+  No save-format change.
 
-304 tests. Presentation layer: `godot/` (Godot 4.7 .NET project, 10 panels, playable
+313 tests. Presentation layer: `godot/` (Godot 4.7 .NET project, 10 panels, playable
 Day 1–7 loop with the Mock provider — requires the Godot 4.7.2-stable .NET editor;
 see `godot/README.md`).
 
@@ -102,6 +108,7 @@ Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download).
 dotnet build BadDeduction.sln
 dotnet run --project tests/BadDeduction.Tests            # all tests
 dotnet run --project tests/BadDeduction.Tests -- Save    # only tests whose name contains "Save"
+dotnet run --project tests/BadDeduction.Tests -- VerticalSlice  # slice beats + 200-seed metrics (~30 s)
 ```
 
 ## Rules for contributors

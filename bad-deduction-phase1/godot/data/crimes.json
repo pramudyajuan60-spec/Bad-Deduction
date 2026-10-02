@@ -39,6 +39,21 @@
         { "id": "burnt_ledger",      "label": "Half-burnt ledger page",   "summary": "A ledger page, half-burnt, with one name circled.",                      "authenticWeight": 50, "falseWeight": 20, "misleadingWeight": 30 },
         { "id": "dropped_lantern",   "label": "Dropped lantern",          "summary": "A lantern, dropped and still warm — its owner claims they were elsewhere.", "authenticWeight": 55, "falseWeight": 25, "misleadingWeight": 20 }
       ]
+    },
+    {
+      "id": "arson_fatal",
+      "label": "Deadly Arson",
+      "description": "A deliberately set fire with a victim inside — the slice's fire-with-a-murder.",
+      "victimKinds": ["Civilian"],
+      "fatal": true,
+      "locationTags": ["crime_scene_candidate"],
+      "minDiscoveryDelayMinutes": 60,
+      "evidenceTemplates": [
+        { "id": "accelerant_traces", "label": "Smell of lamp oil",        "summary": "Lamp-oil smell at the fire's origin point: no accident.",                "authenticWeight": 90, "falseWeight": 3,  "misleadingWeight": 7  },
+        { "id": "burnt_ledger",      "label": "Half-burnt ledger page",   "summary": "A ledger page, half-burnt, with one name circled.",                      "authenticWeight": 75, "falseWeight": 10, "misleadingWeight": 15 },
+        { "id": "victim_locket",      "label": "Victim's silver locket",   "summary": "The victim's locket, found clutched in their hand — they did not run.",   "authenticWeight": 85, "falseWeight": 5,  "misleadingWeight": 10 },
+        { "id": "barred_door",        "label": "Barred from without",      "summary": "The great door was barred from the OUTSIDE — no accident.",               "authenticWeight": 80, "falseWeight": 5,  "misleadingWeight": 15 }
+      ]
     }
   ]
 }

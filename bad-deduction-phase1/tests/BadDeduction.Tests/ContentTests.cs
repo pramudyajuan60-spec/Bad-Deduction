@@ -11,11 +11,11 @@ public sealed class ContentTests
     {
         var db = TestSupport.LoadContent();
         Assert.Equal(0, db.Validate().Count);
-        Assert.Equal(11, db.Locations.Count);
+        Assert.Equal(12, db.Locations.Count);
 
         foreach (var id in new[]
                  {
-                     "loc_central_market", "loc_residential", "loc_city_hall", "loc_church", "loc_warehouse",
+                     "loc_central_market", "loc_residential", "loc_city_hall", "loc_church", "loc_cathedral", "loc_warehouse",
                      "loc_tavern", "loc_guard_station", "loc_forest", "loc_cemetery", "loc_underground", "loc_harbor",
                  })
             Assert.True(db.HasLocation(id), $"missing {id}");

@@ -14,7 +14,7 @@ public sealed class CrimeTests
     public void Crimes_json_loads_murder_and_arson()
     {
         var content = TestSupport.LoadContent();
-        Assert.Equal(2, content.Crimes.Count);
+        Assert.Equal(3, content.Crimes.Count);
         var murder = content.GetCrime("murder");
         Assert.Equal("Murder", murder.Label);
         Assert.True(murder.Fatal);
@@ -22,6 +22,10 @@ public sealed class CrimeTests
         var arson = content.GetCrime("arson");
         Assert.False(arson.Fatal);
         Assert.Equal(3, arson.EvidenceTemplates.Count);
+        var arsonFatal = content.GetCrime("arson_fatal");
+        Assert.Equal("Deadly Arson", arsonFatal.Label);
+        Assert.True(arsonFatal.Fatal);
+        Assert.Equal(4, arsonFatal.EvidenceTemplates.Count);
     }
 
     [Fact]

@@ -761,3 +761,53 @@ panel. Real LLM providers plug into `IAIProvider`; win/lose stays out of scope.
 panel, runs a dialogue exchange and an interview, advances 3 days, saves, and
 quits — any script error fails the run. This is the closest CI gets to "playable"
 without a display.
+
+### ADR-058 — Vertical slice assembly ("The Burning at Saint Velmont")
+`BadDeduction.Core/Slice/SliceScenario.cs` builds the canonical slice so the Godot
+UI can offer "Play vertical slice" (scenario-building lives in Core; only the
+metrics harness lives in tests). 22 characters (15 civilians + 5 police via
+`CastGenerator` with a fixed `CastSpec`), 8 connected locations, Day-1 21:00 fatal
+arson (`arson_fatal`) at `loc_cathedral`. The player is one genius per campaign;
+the opposing genius is seeded. The slice's hidden truth: Malvr set the fire —
+recorded ONLY as `Agenda.IncidentAttribution` (never in events), with the holder
+knowing their own deed via a bland inference. Victim and witnesses are chosen on
+dedicated `DeterministicRandom` streams (`slice.victim`) so setup draws never
+disturb the sim stream (ADR-002). New content: `loc_cathedral` in
+`data/locations.json`, `arson_fatal` in `data/crimes.json` (content, not code).
+
+### ADR-059 — SliceBot: deliberately mediocre, player-legal only
+`BadDeduction.Core/Slice/SliceBot.cs` is a deterministic headless player with a
+fixed simple policy (scene visit → interviews → evidence → hypothesis → alibi
+sweep → review). It uses ONLY the services the UI uses — never `WorldTruth`.
+Mediocre on purpose: it exercises the loop, it does not solve optimally. Policy
+documented in `docs/VERTICAL_SLICE.md`.
+
+### ADR-060 — Solvable = a fair path exists (omniscient grader)
+`SliceMetrics.IsSolvable` is a TEST-HARNESS-ONLY grader that may read ground truth,
+clearly marked as such. Solvable = scene discovered by end of Day 2 AND ≥2
+authentic evidence items discovered AND ≥1 living witness at the end. Rationale:
+two authentic items attached as supporting reach the Believes band (50+8·2=66), so
+a competent player's theory CAN harden. Solvable does not require the mediocre bot
+to solve it.
+
+### ADR-061 — Beats are checks, not scripts
+`SliceBeats` defines the seven pacing beats (incident → investigation →
+contradictions → chain reaction → hidden conflict → convergence → resolution) as
+observable conditions over the event log at day boundaries. The sim must produce
+them emergently; a systematically failing beat means tuning, never scripting.
+Vetted seeds (4, 11, 20 hit all seven; 13 shows the Easy/Genius gap) are
+documented in `docs/VERTICAL_SLICE.md`, not special-cased in code.
+
+### ADR-062 — Phase 12 tuning log
+(a) `arson_fatal` evidence authenticity weights (content): 75/50/65 over 3
+templates → 90/75/85/80 over 4 templates. Measured solvable rate 70.5% → 98.5%
+(bar ≥95%). The old weights made one case in three unfairly thin for the
+signature crime. (b) `ActDeflectAttention` crash fix: the patsy pick could equal
+the rumor listener → `SocialService.Adjust` threw on self-relationship. Fixed with
+`PickLiving(holderId, listeners[0])`. No `*Rules.cs` constant needed changing.
+
+### ADR-063 — Slice performance
+Single-seed 7-day run ≈ 143 ms; the 200-seed metrics suite finishes in ~29 s
+(CI budget <10 min). No optimization was needed; per-minute sim ticks over
+~10,440 minutes × 22 characters stay cheap because idle re-evaluation is already
+gated. Measured 2026-10-02 on the dev machine; re-measure on CI.
