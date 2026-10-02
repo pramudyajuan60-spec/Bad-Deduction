@@ -11,9 +11,10 @@ public sealed class WorldTests
     {
         var s = TestSupport.NewPopulatedSession();
         var evt = s.World.MoveCharacter("c_merchant", "loc_central_market");
+        Assert.True(evt is not null, "the move should succeed");
 
         Assert.Equal("loc_central_market", s.World.GetCharacter("c_merchant").CurrentLocationId);
-        Assert.Equal(WorldEventTypes.CharacterMoved, evt.Type);
+        Assert.Equal(WorldEventTypes.CharacterMoved, evt!.Type);
         Assert.Equal("loc_residential", evt.Data["from"]);
         Assert.True(s.World.CharactersAt("loc_central_market").Any(c => c.Id == "c_merchant"));
     }
@@ -24,7 +25,8 @@ public sealed class WorldTests
         var s = TestSupport.NewPopulatedSession();
         var cause = s.Events.Record("test.alarm");
         var move = s.World.MoveCharacter("c_guard", "loc_warehouse", causedBy: cause.Id);
-        Assert.Equal(cause.Id, move.CausedBy);
+        Assert.True(move is not null, "the move should succeed");
+        Assert.Equal(cause.Id, move!.CausedBy);
     }
 
     [Fact]

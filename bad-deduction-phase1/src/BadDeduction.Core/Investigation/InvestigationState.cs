@@ -71,6 +71,13 @@ public sealed class Hypothesis
     public string Id { get; set; } = "";
     public string PropositionId { get; set; } = "";
     public string Description { get; set; } = "";
+
+    /// <summary>
+    /// Phase 9: who owns this theory. Null = the shared board (player / investigator);
+    /// otherwise an officer id — each officer keeps their own case file, so two officers
+    /// can hold different confidences about the same suspect.
+    /// </summary>
+    public string? OwnerId { get; set; }
     public List<string> SupportingEvidenceIds { get; set; } = new();
     public List<string> RefutingEvidenceIds { get; set; } = new();
     public long UpdatedAt { get; set; }

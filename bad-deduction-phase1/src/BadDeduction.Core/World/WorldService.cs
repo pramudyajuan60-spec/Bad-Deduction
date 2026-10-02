@@ -45,13 +45,35 @@ public sealed class WorldService
             ? c
             : throw new KeyNotFoundException($"Unknown character '{id}'.");
 
-    /// <summary>Moves a character and records a persistent, optionally causally-linked event.</summary>
-    public WorldEvent MoveCharacter(string characterId, string toLocationId, long? causedBy = null)
+    /// <summary>
+    /// Optional access gate (Phase 9 cordons). When set and the check fails, the move is
+    /// denied: a <c>police.access_denied</c> event is logged and null is returned.
+    /// Null means "everyone may pass", which preserves all pre-cordon behavior.
+    /// </summary>
+    public Func<string, string, bool>? AccessCheck { get; set; }
+
+    /// <summary>
+    /// Moves a character and records a persistent, optionally causally-linked event.
+    /// Returns null when the move is denied by <see cref="AccessCheck"/> (the denial itself
+    /// is logged); callers that must move should check the result.
+    /// </summary>
+    public WorldEvent? MoveCharacter(string characterId, string toLocationId, long? causedBy = null)
     {
         var c = GetCharacter(characterId);
         if (!c.IsAlive)
             throw new InvalidOperationException($"'{characterId}' is dead and cannot move on their own.");
         RequireLocation(toLocationId, "destination");
+
+        if (AccessCheck is not null && !AccessCheck(characterId, toLocationId))
+        {
+            _events.Record(
+                WorldEventTypes.PoliceAccessDenied,
+                locationId: toLocationId,
+                participants: new[] { characterId },
+                data: new Dictionary<string, string> { ["to"] = toLocationId },
+                causedBy: causedBy);
+            return null;
+        }
 
         var from = c.CurrentLocationId;
         c.CurrentLocationId = toLocationId;

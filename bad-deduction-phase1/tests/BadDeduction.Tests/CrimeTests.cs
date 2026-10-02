@@ -272,18 +272,28 @@ public sealed class CrimeTests
     [Fact]
     public void Evidence_discovery_requires_knowledge_of_the_incident()
     {
-        var (s, crime, mover, outsider) = SetupDiscovery();
+        var (s, crime, mover, _) = SetupDiscovery();
+        // Phase 9 cordon: the late arrival must be someone the cordon admits —
+        // a police officer, or the player with the consultant's pass.
+        var lateId = new[] { "c_guard", "c_player" }.First(id => id != mover);
+        if (s.World.GetCharacter(lateId).CurrentLocationId == crime.LocationId)
+        {
+            var elsewhere = s.State.World.Locations.Keys
+                .Where(l => l != crime.LocationId).OrderBy(l => l, StringComparer.Ordinal).First();
+            s.World.MoveCharacter(lateId, elsewhere); // pre-discovery: no cordon yet
+        }
         s.Time.Advance(200);
         s.World.MoveCharacter(mover, crime.LocationId); // discovers the scene
-        s.World.MoveCharacter(outsider, crime.LocationId); // arrives later: scene already discovered
+        var arrived = s.World.MoveCharacter(lateId, crime.LocationId); // cordon admits police / player
+        Assert.True(arrived is not null, "the cordon should admit police and the player");
 
         var evidence = s.Crime.EvidenceAtScene(crime.SceneId)[0];
-        // The outsider never perceived the incident, so investigation is refused.
-        Assert.Throws<InvalidOperationException>(() => s.Crime.DiscoverEvidence(outsider, evidence.Id));
+        // The late arrival never perceived the incident, so investigation is refused.
+        Assert.Throws<InvalidOperationException>(() => s.Crime.DiscoverEvidence(lateId, evidence.Id));
 
         // Once told about it through the rumor gate, they can investigate.
-        s.Cognition.TellRumor(mover, outsider, crime.IncidentEventId);
-        var logged = s.Crime.DiscoverEvidence(outsider, evidence.Id);
+        s.Cognition.TellRumor(mover, lateId, crime.IncidentEventId);
+        var logged = s.Crime.DiscoverEvidence(lateId, evidence.Id);
         Assert.Equal("crime.evidence_discovered", logged.Type);
     }
 

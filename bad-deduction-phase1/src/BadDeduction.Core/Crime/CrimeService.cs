@@ -125,6 +125,42 @@ public sealed class CrimeService
         var crimeId = $"crime_{n}";
         var sceneId = $"scene_{n}";
 
+        // State before event: subscribers to crime.incident (e.g. the police alert ladder,
+        // Phase 9) must see the crime, scene, evidence and seal already in place, so the
+        // records are built first and the incident event is published last. IncidentEventId
+        // is fixed up once the event exists (single-threaded: nothing reads it in between).
+        _state.World.Locations[locationId].IsSealed = true;
+
+        var crime = new CrimeRecord
+        {
+            Id = crimeId,
+            DefinitionId = def.Id,
+            VictimId = victim.Id,
+            Fatal = def.Fatal,
+            LocationId = locationId,
+            IncidentEventId = 0, // fixed up below
+            OccurredAt = _state.TotalMinutes,
+            SceneId = sceneId,
+        };
+        _state.Crime.Crimes.Add(crimeId, crime);
+        var scene = new CrimeScene
+        {
+            Id = sceneId,
+            CrimeId = crimeId,
+            LocationId = locationId,
+            IncidentEventId = 0, // fixed up below
+        };
+        _state.Crime.Scenes.Add(sceneId, scene);
+
+        // Evidence comes into existence quietly: it is ground truth, but nobody knows about it
+        // until it is discovered, so per the event-volume policy (ADR-026) creation is not logged.
+        foreach (var template in def.EvidenceTemplates)
+        {
+            var evidenceId = $"ev_{_state.Crime.NextEvidenceId++}";
+            _state.Crime.Evidence.Add(evidenceId,
+                new Evidence(evidenceId, sceneId, template.Label, template.Summary, DrawAuthenticity(template)));
+        }
+
         var incident = _events.Record(WorldEventTypes.CrimeIncident,
             locationId: locationId,
             participants: new[] { victim.Id },
@@ -135,39 +171,8 @@ public sealed class CrimeService
                 ["victim"] = victim.Id,
                 ["fatal"] = def.Fatal ? "true" : "false",
             });
-
-        // The location is cordoned off. Enforcement of the cordon (who may enter) is Phase 9;
-        // for now the seal is a marker that discovery and the future police AI can read.
-        _state.World.Locations[locationId].IsSealed = true;
-
-        var crime = new CrimeRecord
-        {
-            Id = crimeId,
-            DefinitionId = def.Id,
-            VictimId = victim.Id,
-            Fatal = def.Fatal,
-            LocationId = locationId,
-            IncidentEventId = incident.Id,
-            OccurredAt = _state.TotalMinutes,
-            SceneId = sceneId,
-        };
-        _state.Crime.Crimes.Add(crimeId, crime);
-        _state.Crime.Scenes.Add(sceneId, new CrimeScene
-        {
-            Id = sceneId,
-            CrimeId = crimeId,
-            LocationId = locationId,
-            IncidentEventId = incident.Id,
-        });
-
-        // Evidence comes into existence quietly: it is ground truth, but nobody knows about it
-        // until it is discovered, so per the event-volume policy (ADR-026) creation is not logged.
-        foreach (var template in def.EvidenceTemplates)
-        {
-            var evidenceId = $"ev_{_state.Crime.NextEvidenceId++}";
-            _state.Crime.Evidence.Add(evidenceId,
-                new Evidence(evidenceId, sceneId, template.Label, template.Summary, DrawAuthenticity(template)));
-        }
+        crime.IncidentEventId = incident.Id;
+        scene.IncidentEventId = incident.Id;
 
         return crime;
     }

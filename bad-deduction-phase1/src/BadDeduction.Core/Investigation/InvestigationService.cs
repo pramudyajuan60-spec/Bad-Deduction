@@ -463,13 +463,15 @@ public sealed class InvestigationService
     /// An explicit case link files it under that case's timeline.
     /// </summary>
     public Hypothesis ProposeHypothesis(
-        string propositionId, string description, string? crimeId = null, long? causedBy = null)
+        string propositionId, string description, string? crimeId = null, long? causedBy = null, string? ownerId = null)
     {
         if (string.IsNullOrWhiteSpace(propositionId))
             throw new ArgumentException("A proposition id is required.", nameof(propositionId));
         if (string.IsNullOrWhiteSpace(description))
             throw new ArgumentException("A description is required.", nameof(description));
         if (crimeId is not null) _crime.GetCrime(crimeId); // validates
+        if (ownerId is not null && !_state.World.Characters.ContainsKey(ownerId))
+            throw new ArgumentException($"Unknown hypothesis owner '{ownerId}'.", nameof(ownerId));
         var inv = _state.Investigation;
         if (inv.Hypotheses.Values.Any(h => h.PropositionId == propositionId))
             throw new InvalidOperationException($"A hypothesis for '{propositionId}' already exists.");
@@ -479,6 +481,7 @@ public sealed class InvestigationService
             Id = $"hyp_{inv.NextHypothesisId++}",
             PropositionId = propositionId,
             Description = description,
+            OwnerId = ownerId,
             UpdatedAt = _state.TotalMinutes,
         };
         inv.Hypotheses.Add(hyp.Id, hyp);
@@ -488,6 +491,7 @@ public sealed class InvestigationService
             ["proposition"] = propositionId,
             ["description"] = description,
         };
+        if (ownerId is not null) data["owner"] = ownerId;
         if (crimeId is not null) data["crime"] = crimeId;
         _events.Record(WorldEventTypes.HypothesisProposed, data: data, causedBy: causedBy);
         return hyp;

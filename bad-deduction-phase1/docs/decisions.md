@@ -554,3 +554,101 @@ double-attached.
   shows one); confidence lives on memories and hypotheses, not on testimony.
 * No statement retraction/editing: testimony is append-only, like the event log.
 * Background-tier surveillance (city-wide, low-detail) awaits off-slice populations (Phase 12).
+
+---
+
+# Phase 9 — Police AI
+
+```
+PoliceService (session.Police) ── independent officers, the alert ladder, cordons, duties
+  OpenCase / AssessEvidence ── per-officer case files (owned hypotheses, namespaced
+    "{officer}:suspect:{subject}:{crime}"); knowledge-gated; deterministic readings
+  EvaluateSubject ── each officer's own theories move trust/suspicion (Phase 3 ladder follows)
+  EvaluateAlert ── Calm → Alert → Manhunt from case facts (event-driven + daily)
+  CanEnter ── cordon rule wired into WorldService.AccessCheck + the sim's travel check
+  AssignDuties / DutyLocationFor ── Guard/Patrol/Investigate roster; duty steers work blocks
+  Arrest ── bounded: Suspect stance + Believes theory + 2 supporting evidence → InCustody
+PoliceState (on GameState) ── Alert · OfficerRng (lazy per-officer streams) · Duties · Cases
+```
+
+## ADR-045 — Officers diverge by knowledge and by reading, never by omniscience
+Two legitimate divergence sources, both truth-free. (1) Knowledge: officers form and assess
+hypotheses only from evidence *they* know (`CognitionService.Knows` on the evidence's discovery
+event) — an officer who missed a discovery works a thinner file, by construction. (2) Reading:
+`ReadingOf(officer, evidence, subject)` is a pure function of `(runSeed, officer, evidence,
+subject)` via `DeterministicRandom.Derive` — Supports/Inconclusive/Refutes at 70/20/10 — so two
+officers given identical evidence can attach different for/against counts and land at different
+confidences, deterministically and order-independently. Nothing here reads `WorldTruth`; a
+reflection test pins the same ban the AI namespace carries.
+
+## ADR-046 — Owned hypotheses namespace the board
+`Hypothesis.OwnerId` (null = the shared investigator board; otherwise an officer id) lets each
+officer keep their own case file while reusing the whole Phase 8 machinery — confidence math,
+band transitions, evidence attachment rules. Officer propositions are namespaced
+`{officerId}:suspect:{subjectId}:{crimeId}`, so the global proposition-uniqueness rule still
+holds. `OpenCase` is knowledge-gated: an officer who never heard of the incident cannot open
+the file. `AssessEvidence` attaches only known evidence, read the officer's own way, then
+updates the minimal case state (Open → PersonOfInterest on a Believes-band theory).
+
+## ADR-047 — The trust ladder is driven per officer by their own theories
+`EvaluateSubject` turns an officer's case file into relationship changes: each owned Believes
+hypothesis moves Trust −8 / Suspicion +10 toward the subject, Suspect-band moves −3/+4, and a
+Dismissed theory with 2+ refuting items partially exonerates (+5/−3). The Phase 3 stance ladder
+(cooperate/question/verify/suspect) then follows from the numbers — no separate police attitude
+store to drift out of sync. Nudges double during a Manhunt. All changes go through
+`SocialService.Adjust` with reason "police case evaluation", so they are logged and explainable.
+
+## ADR-048 — The alert ladder steps on facts, never jumps
+`AlertLevel` (Calm → Alert → Manhunt) recomputes from case facts and moves at most one rung per
+evaluation: a fatal incident undiscovered for 720 minutes or 2+ open cases raises toward Alert;
+2+ open fatal cases or 3+ open cases raise toward Manhunt; it steps back down only when nothing
+is open. Evaluation is event-driven (`crime.incident`, `crime.discovered`, `police.arrest`) plus
+a daily pass for the undiscovered-timeout. Effects are concrete and implemented: duty coverage
+scales (Guard on every sealed scene at Alert+, patrol slots 1/2/all by level) and evaluation
+nudges double at Manhunt. This required one ordering fix in Phase 7: `GenerateIncident` now
+builds the crime/scene/evidence records *before* publishing `crime.incident`, because subscribers
+must see the state the event describes — the same state-first convention `WorldService` already
+followed.
+
+## ADR-049 — Cordons guard discovered scenes; the player holds a consultant's pass
+`PoliceService.CanEnter` denies non-police entry to locations whose sealed scene is *discovered*:
+an undiscovered scene has no cordon because nobody knows to guard it yet — which also preserves
+Phase 7 discovery semantics exactly (the first arrival must be able to walk in). Police officers
+and the player character (the civilian consultant) pass. Enforcement hooks into
+`WorldService.MoveCharacter` via a nullable `AccessCheck` delegate (null = allow-all, so all
+pre-cordon behavior and hand-built test worlds are untouched): denials log
+`police.access_denied` and return null. The simulation checks the same gate *before* starting
+travel, so cordoned civilians idle instead of spamming denials, and mid-travel arrivals that go
+bad cancel cleanly.
+
+## ADR-050 — Duties steer work blocks; rosters are opt-in
+`AssignDuties()` builds one duty per officer per day — Guard on sealed scenes (round-robin by id
+order), Patrol on a deterministic per-officer draw over unsealed locations, Investigate at the
+officer's station for the rest — and logs `police.duty_assigned`. `DutyLocationFor` is the seam
+`WorldSimulation` reads: an officer's `Working` blocks run at the duty location instead of the
+station. Rosters are opt-in per run (no auto-assign in `NewRun`, so no existing test's event log
+changed); `DayChanged` re-assigns daily once a roster exists. Per-officer RNG streams are derived
+lazily (`"police.{officerId}"`) and persisted, used only for tie-breaks and patrol choices.
+
+## ADR-051 — Arrest is bounded and logged; guilt is not decided here
+`Arrest` requires: a living police officer, a living subject not already detained, the officer's
+stance at SuspicionOfSubject, their own hypothesis at the Believes band, and ≥2 discovered
+supporting evidence items. It sets the minimal case state (InCustody), logs `police.arrest` with
+the hypothesis and confidence, and the simulation skips detained characters. A wrong arrest is
+possible — the theory may rest on false evidence — and is simply part of the log; trial,
+sentencing and win/lose stay out of scope (audit §D).
+
+## Save format v8
+Adds `State.Police` (alert, officer RNG streams, duty roster, case states). Migration v7→v8
+installs a fresh Calm state; officer streams derive lazily from the run seed. The validator
+checks: defined alert/case/duty values, duty↔officer/location/scene references, roster-day
+consistency, case↔crime/subject references, non-zero RNG streams, and hypothesis owner references.
+
+## Deferred / known limits
+* Officers do not yet act autonomously on their case files (no self-directed interviews or
+  evidence hunts); `OpenCase`/`AssessEvidence` are explicit calls for the Phase 11+ game loop
+  or AI director to drive.
+* No police hierarchy yet (captain vs guards); duty assignment is flat round-robin.
+* Unsealing scenes and full case resolution (trial/win/lose) are future work.
+* The interrogation-pressure effect of higher alert levels is currently expressed through
+  doubled evaluation nudges; direct pressure mechanics belong to a future pass.

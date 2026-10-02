@@ -11,7 +11,7 @@ that emerge from the simulation instead of a scripted solution.
 
 ## Status
 
-**Phases 1-8 complete.**
+**Phases 1-9 complete.**
 * Phase 1 (Foundation): deterministic RNG, game time, event bus + causal world-event log, versioned
   save/load with state hashing, location content, truth-vs-player-view separation.
 * Phase 2 (Characters): seeded cast generation (`session.Cast.Generate(new CastSpec())` → 17 civilians
@@ -54,13 +54,21 @@ that emerge from the simulation instead of a scripted solution.
   (false evidence may support one — it stays false). Merged case timelines for the board.
   Save format v7.
 
-244 tests. No presentation layer yet (Phase 11).
+* Phase 9 (Police AI): `session.Police` — independent officers with their own case files
+  (owned hypotheses; divergence from different knowledge plus deterministic per-officer
+  evidence readings), dynamic trust-ladder evaluation from each officer's own theories,
+  a city alert ladder (Calm → Alert → Manhunt, driven by unsolved violence), cordon
+  enforcement on discovered sealed scenes (police and the player pass), daily duty rosters
+  (Guard/Patrol/Investigate) that steer officers' work blocks in the sim, and bounded
+  arrests (Suspect stance + Believes-band theory + 2 supporting evidence). Save format v8.
+
+273 tests. No presentation layer yet (Phase 11).
 
 ## Layout
 
 ```
 src/BadDeduction.Core/     engine-free simulation library (net8.0)
-  Core/  World/  Characters/  Social/  Cognition/  Content/  AI/  Crime/  Investigation/
+  Core/  World/  Characters/  Social/  Cognition/  Content/  AI/  Crime/  Investigation/  Police/
 tests/BadDeduction.Tests/  dependency-free test runner
 data/                      data-driven content (locations, occupations, goals, character secrets, names, crimes)
 docs/                      audit, roadmap, decisions

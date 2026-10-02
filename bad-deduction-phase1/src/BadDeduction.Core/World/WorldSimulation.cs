@@ -2,6 +2,7 @@ using BadDeduction.Characters;
 using BadDeduction.Cognition;
 using BadDeduction.Content;
 using BadDeduction.Core;
+using BadDeduction.Police;
 
 namespace BadDeduction.World;
 
@@ -95,6 +96,18 @@ public sealed class WorldSimulation
         _content = content;
     }
 
+    /// <summary>
+    /// Phase 9 cordon gate, wired to <see cref="PoliceService.CanEnter"/> by GameSession.
+    /// Null means everyone may travel (pre-cordon behavior).
+    /// </summary>
+    public Func<string, string, bool>? CanEnter { get; set; }
+
+    /// <summary>
+    /// Phase 9 duty seam, wired to <see cref="PoliceService.DutyLocationFor"/> by GameSession.
+    /// When an officer has a duty for the day, their work blocks run at the duty location.
+    /// </summary>
+    public Func<string, int, string?>? DutyLocationFor { get; set; }
+
     /// <summary>Advances time and simulates the world minute by minute. Deterministic per seed.</summary>
     public void Advance(int minutes)
     {
@@ -134,10 +147,15 @@ public sealed class WorldSimulation
             var c = _state.World.Characters[id];
             if (!c.IsAlive) continue;
             if (!string.IsNullOrEmpty(_state.Player.CharacterId) && id == _state.Player.CharacterId) continue;
+            if (IsInCustody(id)) continue; // detained characters do not move (Phase 9)
             if (now % SimulationTiers.CadenceMinutes(TierOf(id)) != 0) continue;
             EvaluateRoutine(id, now);
         }
     }
+
+    /// <summary>Phase 9: characters in custody are detained where they are.</summary>
+    private bool IsInCustody(string characterId) =>
+        _state.Police.Cases.Values.Any(c => c.State == CaseState.InCustody && c.SubjectId == characterId);
 
     /// <summary>
     /// Finishes every trip whose arrival minute has come, for all tiers alike. Runs before routine
@@ -160,6 +178,14 @@ public sealed class WorldSimulation
             }
             var moved = _world.MoveCharacter(id, travel.ToLocationId, causedBy: travel.DepartureEventId);
             _state.World.ActiveTravels.Remove(id);
+            if (moved is null)
+            {
+                // The destination became off-limits mid-travel (e.g. a cordon went up):
+                // cancel the trip; the character stays where they are. The denial itself
+                // is already logged by WorldService.
+                SetActivity(c, Activity.Idle, "arrival denied");
+                continue;
+            }
             var arrival = new GameTime(travel.ArrivalMinute);
             var (block, _) = BlockAt(BlocksFor(id, arrival.Day), arrival.MinuteOfDay);
             SetActivity(c, block.Activity, $"arrived at {travel.ToLocationId}");
@@ -204,6 +230,13 @@ public sealed class WorldSimulation
 
     private void StartTravel(CharacterState c, string toLocationId, long now)
     {
+        if (CanEnter is not null && !CanEnter(c.Id, toLocationId))
+        {
+            // Cordoned (Phase 9): don't start the trip, don't spam the log — just wait.
+            // The denial is recorded when someone actually attempts the move by hand.
+            SetActivity(c, Activity.Idle, "waiting: destination cordoned");
+            return;
+        }
         var minutes = _content.TravelMinutes(c.CurrentLocationId, toLocationId);
         var departed = _events.Record(WorldEventTypes.CharacterDeparted,
             locationId: c.CurrentLocationId,
@@ -249,10 +282,28 @@ public sealed class WorldSimulation
 
     // ------------------------------------------------------------------ helpers
 
-    private IReadOnlyList<ScheduleBlock> BlocksFor(string characterId, int day) =>
-        _state.World.Schedules.TryGetValue(characterId, out var schedule)
+    /// <summary>
+    /// Schedule blocks for a character on a day. Police officers with an active duty roster
+    /// work their duty location instead of their station (Phase 9 seam).
+    /// </summary>
+    private IReadOnlyList<ScheduleBlock> BlocksFor(string characterId, int day)
+    {
+        var blocks = _state.World.Schedules.TryGetValue(characterId, out var schedule)
             ? schedule.ForDay(day)
             : DefaultRoutine.For(_state.World.Characters[characterId].HomeLocationId).ForDay(day);
+        var dutyLoc = _state.World.Characters.TryGetValue(characterId, out var c)
+            && c.Kind == CharacterKind.Police
+            ? DutyLocationFor?.Invoke(characterId, day)
+            : null;
+        if (dutyLoc is null) return blocks;
+        return blocks.Select(b => b.Activity == Activity.Working
+            ? new ScheduleBlock
+            {
+                StartMinute = b.StartMinute, EndMinute = b.EndMinute,
+                LocationId = dutyLoc, Activity = b.Activity,
+            }
+            : b).ToList();
+    }
 
     private static (ScheduleBlock Block, int Index) BlockAt(IReadOnlyList<ScheduleBlock> blocks, int minuteOfDay)
     {

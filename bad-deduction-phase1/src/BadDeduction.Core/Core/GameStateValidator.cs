@@ -2,6 +2,7 @@ using BadDeduction.Characters;
 using BadDeduction.Content;
 using BadDeduction.Crime;
 using BadDeduction.Investigation;
+using BadDeduction.Police;
 using BadDeduction.Social;
 using BadDeduction.World;
 
@@ -39,6 +40,7 @@ public static class GameStateValidator
         errors.AddRange(ValidateTravel(state));
         errors.AddRange(ValidateCrime(state));
         errors.AddRange(ValidateInvestigation(state));
+        errors.AddRange(ValidatePolice(state));
 
         // Event log
         var log = state.EventLog;
@@ -235,6 +237,8 @@ public static class GameStateValidator
             if (key != h.Id) errors.Add($"Hypothesis key '{key}' does not match id '{h.Id}'.");
             if (string.IsNullOrWhiteSpace(h.PropositionId)) errors.Add($"Hypothesis '{h.Id}' has an empty proposition id.");
             if (string.IsNullOrWhiteSpace(h.Description)) errors.Add($"Hypothesis '{h.Id}' has an empty description.");
+            if (h.OwnerId is not null && !state.World.Characters.ContainsKey(h.OwnerId))
+                errors.Add($"Hypothesis '{h.Id}' has unknown owner '{h.OwnerId}'.");
             if (h.UpdatedAt < 0 || h.UpdatedAt > state.TotalMinutes) errors.Add($"Hypothesis '{h.Id}' has an impossible timestamp.");
             var seenEvidence = new HashSet<string>(StringComparer.Ordinal);
             foreach (var eid in h.SupportingEvidenceIds.Concat(h.RefutingEvidenceIds))
@@ -246,6 +250,49 @@ public static class GameStateValidator
         var seenProps = new HashSet<string>(StringComparer.Ordinal);
         foreach (var h in inv.Hypotheses.Values)
             if (!seenProps.Add(h.PropositionId)) errors.Add($"Duplicate hypothesis proposition '{h.PropositionId}'.");
+        return errors;
+    }
+
+    private static IEnumerable<string> ValidatePolice(GameState state)
+    {
+        var errors = new List<string>();
+        var pol = state.Police;
+        if (!Enum.IsDefined(pol.Alert)) errors.Add("Police.Alert has an invalid value.");
+        if (pol.DutiesDay < 0) errors.Add("Police.DutiesDay is negative.");
+
+        foreach (var (key, rng) in pol.OfficerRng)
+        {
+            if (!state.World.Characters.TryGetValue(key, out var c) || c.Kind != CharacterKind.Police)
+                errors.Add($"Police.OfficerRng has an entry for non-officer '{key}'.");
+            if (rng.IsZero) errors.Add($"Police.OfficerRng for '{key}' is all zero.");
+        }
+
+        foreach (var (officerId, duties) in pol.Duties)
+        {
+            if (!state.World.Characters.TryGetValue(officerId, out var c) || c.Kind != CharacterKind.Police)
+                errors.Add($"Police.Duties has an entry for non-officer '{officerId}'.");
+            foreach (var d in duties)
+            {
+                if (d.OfficerId != officerId) errors.Add($"Duty for '{officerId}' names officer '{d.OfficerId}'.");
+                if (d.Day < 1) errors.Add($"Duty for '{officerId}' has an invalid day.");
+                if (d.Day != pol.DutiesDay) errors.Add($"Duty for '{officerId}' is for day {d.Day}, roster is for day {pol.DutiesDay}.");
+                if (!Enum.IsDefined(d.Kind)) errors.Add($"Duty for '{officerId}' has an invalid kind.");
+                if (!state.World.Locations.ContainsKey(d.LocationId))
+                    errors.Add($"Duty for '{officerId}' references unknown location '{d.LocationId}'.");
+                if (d.SceneId is not null && !state.Crime.Scenes.ContainsKey(d.SceneId))
+                    errors.Add($"Duty for '{officerId}' references unknown scene '{d.SceneId}'.");
+            }
+        }
+
+        foreach (var (crimeId, cs) in pol.Cases)
+        {
+            if (!state.Crime.Crimes.ContainsKey(crimeId)) errors.Add($"Police case references unknown crime '{crimeId}'.");
+            if (!Enum.IsDefined(cs.State)) errors.Add($"Police case '{crimeId}' has an invalid state.");
+            if (cs.SubjectId is not null && !state.World.Characters.ContainsKey(cs.SubjectId))
+                errors.Add($"Police case '{crimeId}' references unknown subject '{cs.SubjectId}'.");
+            if (cs.State == CaseState.Open && cs.SubjectId is not null)
+                errors.Add($"Police case '{crimeId}' is Open but names a subject.");
+        }
         return errors;
     }
 

@@ -4,6 +4,7 @@ using BadDeduction.Cognition;
 using BadDeduction.Content;
 using BadDeduction.Crime;
 using BadDeduction.Investigation;
+using BadDeduction.Police;
 using BadDeduction.Social;
 using BadDeduction.World;
 
@@ -30,12 +31,17 @@ public sealed class GameSession
 
     /// <summary>Phase 7: incidents, scenes, evidence and discovery.</summary>
     public CrimeService Crime { get; }
-
     /// <summary>
     /// Phase 8: surveillance, interviews, interrogations, statements, contradictions and
     /// hypotheses — the investigator's toolkit.
     /// </summary>
     public InvestigationService Investigate { get; }
+
+    /// <summary>
+    /// Phase 9: independent officers, trust-ladder dynamics, the alert ladder, cordons
+    /// and duty rosters.
+    /// </summary>
+    public PoliceService Police { get; }
 
     /// <summary>
     /// Phase 5: the world tick. Advance time through here (not <see cref="Time"/>) when the
@@ -72,7 +78,11 @@ public sealed class GameSession
         Cast = new CastGenerator(state, content, World, Relationships);
         Crime = new CrimeService(state, Events, Cognition, content);
         Investigate = new InvestigationService(state, Events, Cognition, Crime, Social, content);
+        Police = new PoliceService(state, Events, Social, Investigate, Crime, Cognition, content);
+        World.AccessCheck = Police.CanEnter;
         Simulate = new WorldSimulation(state, Time, Events, World, Cognition, content);
+        Simulate.CanEnter = Police.CanEnter;
+        Simulate.DutyLocationFor = Police.DutyLocationFor;
         View = new PlayerView(state);
         Debug = new DebugAccess(state);
         var context = new ContextEngine(

@@ -26,7 +26,7 @@ public sealed class SaveEnvelope
 public static class SaveSystem
 {
     public const string GameId = "BadDeduction";
-    public const int CurrentFormatVersion = 7;
+    public const int CurrentFormatVersion = 8;
 
     /// <summary>Migrations keyed by the version they upgrade FROM (operate on the raw JSON tree).</summary>
     private static readonly Dictionary<int, Action<JsonNode>> Migrations = new()
@@ -96,6 +96,15 @@ public static class SaveSystem
             if (root["State"] is not JsonObject state) return;
             if (state["Investigation"] is not null) return;
             state["Investigation"] = JsonSerializer.SerializeToNode(new Investigation.InvestigationState(), Compact);
+        },
+        // v7 -> v8 (Phase 9): runs gain the police state (alert level, duty roster, case
+        // states, per-officer RNG streams). Old saves get a fresh Calm state; officer RNG
+        // streams are derived lazily from the run seed, so nothing needs seeding here.
+        [7] = root =>
+        {
+            if (root["State"] is not JsonObject state) return;
+            if (state["Police"] is not null) return;
+            state["Police"] = JsonSerializer.SerializeToNode(new Police.PoliceState(), Compact);
         },
     };
 

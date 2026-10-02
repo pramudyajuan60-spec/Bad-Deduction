@@ -59,4 +59,8 @@ public static class WorldEventTypes
     public const string Surveyed = "investigation.surveyed";
     public const string HypothesisProposed = "investigation.hypothesis_proposed";
     public const string HypothesisUpdated = "investigation.hypothesis_updated";
+    public const string PoliceAccessDenied = "police.access_denied";
+    public const string PoliceDutyAssigned = "police.duty_assigned";
+    public const string PoliceAlertChanged = "police.alert_changed";
+    public const string PoliceArrest = "police.arrest";
 }
