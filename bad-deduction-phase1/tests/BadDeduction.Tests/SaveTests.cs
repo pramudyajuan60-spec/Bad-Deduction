@@ -118,4 +118,51 @@ public sealed class SaveTests
         var b = TestSupport.NewPopulatedSession(seed: 9);
         Assert.Equal(SaveSystem.Serialize(a.State), SaveSystem.Serialize(b.State));
     }
+
+    [Fact]
+    public void Generated_cast_survives_save_and_load_with_identical_state_hash()
+    {
+        var s = CastSupport.NewCastSession(77);
+        var path = Path.Combine(Path.GetTempPath(), "bd-cast-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            s.Save(path);
+            var loaded = GameSession.Load(path, TestSupport.LoadContent());
+            Assert.Equal(s.StateHash(), loaded.StateHash());
+            Assert.Equal(s.State.World.Relationships.Count, loaded.State.World.Relationships.Count);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Version_1_saves_migrate_to_the_current_format()
+    {
+        var s = TestSupport.NewPopulatedSession(5);
+        var json = SaveSystem.Serialize(s.State);
+        var v1 = json
+            .Replace(",\"Profiles\":{},\"Schedules\":{},\"Relationships\":[]", "")
+            .Replace($"\"FormatVersion\":{SaveSystem.CurrentFormatVersion}", "\"FormatVersion\":1");
+        Assert.False(v1.Contains("Profiles"), "test setup: v1 JSON should not have Profiles");
+        var migrated = SaveSystem.Deserialize(v1);
+        Assert.Equal(0, migrated.World.Profiles.Count);
+        Assert.Equal(s.State.World.Characters.Count, migrated.World.Characters.Count);
+    }
+
+    [Fact]
+    public void Simulation_after_loading_a_cast_matches_the_uninterrupted_run()
+    {
+        var a = CastSupport.NewCastSession(31);
+        var b = CastSupport.NewCastSession(31);
+        TestSupport.Simulate(a, 40);
+        var path = Path.Combine(Path.GetTempPath(), "bd-cast2-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            TestSupport.Simulate(b, 20);
+            b.Save(path);
+            var resumed = GameSession.Load(path, TestSupport.LoadContent());
+            TestSupport.Simulate(resumed, 20);
+            Assert.Equal(a.StateHash(), resumed.StateHash());
+        }
+        finally { File.Delete(path); }
+    }
 }

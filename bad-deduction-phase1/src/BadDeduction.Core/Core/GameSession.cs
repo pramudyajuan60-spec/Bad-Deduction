@@ -1,5 +1,6 @@
 using BadDeduction.Characters;
 using BadDeduction.Content;
+using BadDeduction.Social;
 using BadDeduction.World;
 
 namespace BadDeduction.Core;
@@ -16,6 +17,11 @@ public sealed class GameSession
     public TimeSystem Time { get; }
     public WorldService World { get; }
     public HiddenIdentitySystem Identity { get; }
+    public ScheduleSystem Schedules { get; }
+    public RelationshipGraph Relationships { get; }
+    public SocialService Social { get; }
+    public ComplianceEvaluator Compliance { get; }
+    public CastGenerator Cast { get; }
     public PlayerView View { get; }
     public DebugAccess Debug { get; }
 
@@ -30,6 +36,11 @@ public sealed class GameSession
         Time = new TimeSystem(state, Events);
         World = new WorldService(state, Events, content);
         Identity = new HiddenIdentitySystem(state);
+        Schedules = new ScheduleSystem(state, content);
+        Relationships = new RelationshipGraph(state);
+        Social = new SocialService(state, Events, Relationships);
+        Compliance = new ComplianceEvaluator(state, Social);
+        Cast = new CastGenerator(state, content, World, Relationships);
         View = new PlayerView(state);
         Debug = new DebugAccess(state);
         Rng = new DeterministicRandom(state.SimRng);
@@ -70,6 +81,7 @@ public sealed class GameSession
             if (!content.HasLocation(id)) errors.Add($"Save references location '{id}' which is not in the loaded content.");
         foreach (var def in content.Locations)
             if (!state.World.Locations.ContainsKey(def.Id)) errors.Add($"Loaded content has location '{def.Id}' missing from the save.");
+        errors.AddRange(GameStateValidator.ValidateAgainstContent(state, content));
         if (errors.Count > 0)
             throw new SaveFormatException("State failed validation:\n - " + string.Join("\n - ", errors));
         return new GameSession(state, content);

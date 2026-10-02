@@ -26,10 +26,34 @@ public sealed class SaveEnvelope
 public static class SaveSystem
 {
     public const string GameId = "BadDeduction";
-    public const int CurrentFormatVersion = 1;
+    public const int CurrentFormatVersion = 3;
 
     /// <summary>Migrations keyed by the version they upgrade FROM (operate on the raw JSON tree).</summary>
-    private static readonly Dictionary<int, Action<JsonNode>> Migrations = new();
+    private static readonly Dictionary<int, Action<JsonNode>> Migrations = new()
+    {
+        // v1 -> v2 (Phase 2): worlds gain character profiles, schedules and relationships.
+        [1] = root =>
+        {
+            if (root["State"]?["World"] is not JsonObject world) return;
+            world["Profiles"] ??= new JsonObject();
+            world["Schedules"] ??= new JsonObject();
+            world["Relationships"] ??= new JsonArray();
+        },
+        // v2 -> v3 (Phase 3): relationship edges gain the eight numeric axes. Old edges only knew their kind,
+        // so they start at that kind's resting values (neutral personalities: v2 saves carry no social history).
+        [2] = root =>
+        {
+            if (root["State"]?["World"]?["Relationships"] is not JsonArray edges) return;
+            foreach (var node in edges)
+            {
+                if (node is not JsonObject edge) continue;
+                var kind = Enum.TryParse<Social.RelationshipKind>(edge["Kind"]?.GetValue<string>(), out var k) ? k : Social.RelationshipKind.Acquaintance;
+                var resting = Social.SocialBaselines.Resting(kind, null, null);
+                foreach (var axis in Social.SocialRules.AllAxes)
+                    edge[axis.ToString()] = resting[(int)axis];
+            }
+        },
+    };
 
     private static readonly JsonSerializerOptions Compact = CreateOptions(indented: false);
     private static readonly JsonSerializerOptions Indented = CreateOptions(indented: true);

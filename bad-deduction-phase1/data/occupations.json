@@ -1,0 +1,24 @@
+{
+  // Provisional occupations mapped onto the locations of "Desain mapkota.png".
+  // shiftEndHour must be <= 23 so every character can be home and asleep across midnight.
+  // Police occupations have hasDayOff=false: the 7-day slice always has the station staffed.
+  "occupations": [
+    { "id": "merchant",         "name": "Merchant",         "kind": "Civilian", "workLocationId": "loc_central_market", "shiftStartHour": 8,  "shiftEndHour": 17, "minAge": 22, "maxAge": 65, "weight": 3, "maxCount": 3 },
+    { "id": "shopkeeper",       "name": "Shopkeeper",       "kind": "Civilian", "workLocationId": "loc_central_market", "shiftStartHour": 9,  "shiftEndHour": 18, "minAge": 20, "maxAge": 65, "weight": 2, "maxCount": 2 },
+    { "id": "innkeeper",        "name": "Innkeeper",        "kind": "Civilian", "workLocationId": "loc_tavern",         "shiftStartHour": 15, "shiftEndHour": 23, "minAge": 28, "maxAge": 65, "weight": 1, "maxCount": 1 },
+    { "id": "barkeep",          "name": "Barkeep",          "kind": "Civilian", "workLocationId": "loc_tavern",         "shiftStartHour": 16, "shiftEndHour": 23, "minAge": 20, "maxAge": 50, "weight": 2, "maxCount": 2 },
+    { "id": "priest",           "name": "Priest",           "kind": "Civilian", "workLocationId": "loc_church",         "shiftStartHour": 7,  "shiftEndHour": 15, "minAge": 30, "maxAge": 75, "weight": 1, "maxCount": 1 },
+    { "id": "healer",           "name": "Healer",           "kind": "Civilian", "workLocationId": "loc_church",         "shiftStartHour": 9,  "shiftEndHour": 17, "minAge": 26, "maxAge": 65, "weight": 1, "maxCount": 1 },
+    { "id": "clerk",            "name": "Clerk",            "kind": "Civilian", "workLocationId": "loc_city_hall",      "shiftStartHour": 8,  "shiftEndHour": 16, "minAge": 20, "maxAge": 55, "weight": 3, "maxCount": 3 },
+    { "id": "official",         "name": "Official",         "kind": "Civilian", "workLocationId": "loc_city_hall",      "shiftStartHour": 9,  "shiftEndHour": 17, "minAge": 35, "maxAge": 65, "weight": 1, "maxCount": 1 },
+    { "id": "archivist",        "name": "Archivist",        "kind": "Civilian", "workLocationId": "loc_city_hall",      "shiftStartHour": 9,  "shiftEndHour": 17, "minAge": 24, "maxAge": 65, "weight": 1, "maxCount": 1 },
+    { "id": "warehouse_worker", "name": "Warehouse Worker", "kind": "Civilian", "workLocationId": "loc_warehouse",      "shiftStartHour": 7,  "shiftEndHour": 15, "minAge": 20, "maxAge": 55, "weight": 3, "maxCount": 3 },
+    { "id": "gravekeeper",      "name": "Gravekeeper",      "kind": "Civilian", "workLocationId": "loc_cemetery",       "shiftStartHour": 7,  "shiftEndHour": 15, "minAge": 30, "maxAge": 70, "weight": 1, "maxCount": 1 },
+    { "id": "forester",         "name": "Forester",         "kind": "Civilian", "workLocationId": "loc_forest",         "shiftStartHour": 6,  "shiftEndHour": 14, "minAge": 22, "maxAge": 60, "weight": 1, "maxCount": 1 },
+    { "id": "dockworker",       "name": "Dockworker",       "kind": "Civilian", "workLocationId": "loc_harbor",         "shiftStartHour": 7,  "shiftEndHour": 15, "minAge": 20, "maxAge": 55, "weight": 2, "maxCount": 3 },
+
+    { "id": "guard_captain", "name": "Guard Captain", "kind": "Police", "workLocationId": "loc_guard_station", "shiftStartHour": 8,  "shiftEndHour": 18, "minAge": 35, "maxAge": 60, "weight": 1, "minCount": 1, "maxCount": 1, "hasDayOff": false },
+    { "id": "guard_day",     "name": "Guard (Day)",   "kind": "Police", "workLocationId": "loc_guard_station", "shiftStartHour": 7,  "shiftEndHour": 15, "minAge": 21, "maxAge": 55, "weight": 1, "maxCount": 3, "hasDayOff": false },
+    { "id": "guard_night",   "name": "Guard (Night)", "kind": "Police", "workLocationId": "loc_guard_station", "shiftStartHour": 15, "shiftEndHour": 23, "minAge": 21, "maxAge": 55, "weight": 1, "maxCount": 3, "hasDayOff": false }
+  ]
+}

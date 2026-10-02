@@ -1,0 +1,20 @@
+{
+  // requires: every listed tag must hold for the character.
+  //   family/friend/secret = has at least one; police/civilian = character kind.
+  // targetFrom: which relationship a goal is aimed at (family or friend); omitted = no target.
+  "goals": [
+    { "id": "protect_family",       "label": "Protect my family",            "slot": "Primary",   "weight": 4, "requires": ["family"],   "targetFrom": "Family" },
+    { "id": "keep_job",             "label": "Keep my job",                  "slot": "Primary",   "weight": 4, "requires": ["civilian"] },
+    { "id": "protect_reputation",   "label": "Protect my reputation",        "slot": "Primary",   "weight": 3, "requires": ["civilian"] },
+    { "id": "hide_secret",          "label": "Keep my secret hidden",        "slot": "Primary",   "weight": 6, "requires": ["secret"] },
+    { "id": "uphold_law",           "label": "Uphold the law",               "slot": "Primary",   "weight": 6, "requires": ["police"] },
+    { "id": "find_truth",           "label": "Find out what really happened","slot": "Primary",   "weight": 1, "requires": [] },
+
+    { "id": "maintain_friendship",  "label": "Stay close to a friend",       "slot": "Secondary", "weight": 4, "requires": ["friend"],   "targetFrom": "Friend" },
+    { "id": "visit_family",         "label": "Spend time with family",       "slot": "Secondary", "weight": 3, "requires": ["family"],   "targetFrom": "Family" },
+    { "id": "avoid_police",         "label": "Stay out of the guards' sight","slot": "Secondary", "weight": 5, "requires": ["secret", "civilian"] },
+    { "id": "earn_money",           "label": "Earn more money",              "slot": "Secondary", "weight": 3, "requires": [] },
+    { "id": "avoid_conflict",       "label": "Avoid trouble",                "slot": "Secondary", "weight": 3, "requires": [] },
+    { "id": "discover_truth",       "label": "Learn what others are hiding", "slot": "Secondary", "weight": 2, "requires": [] }
+  ]
+}

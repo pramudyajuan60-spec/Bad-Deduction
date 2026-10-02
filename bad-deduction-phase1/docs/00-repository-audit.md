@@ -154,8 +154,8 @@ LLM access: `IAIProvider` abstraction with `MockAIProvider` first; keys from env
 | Phase | Deliverable | Exit criteria |
 |---|---|---|
 | **1 Foundation** ✅ | State, time, events, save/load, RNG, basic world/NPC data, hidden-identity separation | 41 tests; save→load→continue hash-identical to uninterrupted run |
-| 2 Characters | Seeded NPC generation, personality, goals, schedules | Same seed ⇒ same cast; different seeds ⇒ different social worlds |
-| 3 Social | Trust/suspicion/fear/respect/loyalty/influence, relationship graph | Trust alone never forces an action (tested) |
+| 2 Characters ✅ | Seeded NPC generation, personality, goals, schedules, relationships (tags) | Same seed ⇒ same cast; different seeds ⇒ different social worlds |
+| 3 Social ✅ | Trust/suspicion/fear/respect/loyalty/influence, relationship graph | Trust alone never forces an action (tested) |
 | 4 Memory & belief | Memory decay/distortion, 5-layer knowledge, beliefs, rumors | NPC cannot know what it never received (tested) |
 | 5 World simulation | Schedules, movement, tiered simulation | A 7-day run with no player produces plausible, varied routines |
 | 6 AI dialogue | Context engine, provider abstraction, mock provider, validator | Mock-driven CI; no truth in any prompt (leak test) |

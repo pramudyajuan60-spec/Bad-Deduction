@@ -1,4 +1,5 @@
 using BadDeduction.Characters;
+using BadDeduction.Social;
 
 namespace BadDeduction.World;
 
@@ -15,4 +16,9 @@ public sealed class WorldState
 {
     public Dictionary<string, LocationState> Locations { get; set; } = new();
     public Dictionary<string, CharacterState> Characters { get; set; } = new();
+
+    // Phase 2. Keyed by character id; optional per character (hand-built test worlds have none).
+    public Dictionary<string, CharacterProfile> Profiles { get; set; } = new();
+    public Dictionary<string, Schedule> Schedules { get; set; } = new();
+    public List<RelationshipEdge> Relationships { get; set; } = new();
 }

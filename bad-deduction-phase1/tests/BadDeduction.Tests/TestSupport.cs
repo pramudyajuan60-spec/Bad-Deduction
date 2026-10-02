@@ -51,3 +51,14 @@ internal static class TestSupport
         }
     }
 }
+
+internal static class CastSupport
+{
+    /// <summary>A fresh run with a generated cast (17 civilians + 5 police by default).</summary>
+    public static GameSession NewCastSession(ulong seed = 42, CastSpec? spec = null)
+    {
+        var s = GameSession.NewRun(seed, Campaign.Lumiel, Difficulty.Medium, TestSupport.LoadContent());
+        s.Cast.Generate(spec ?? new CastSpec());
+        return s;
+    }
+}

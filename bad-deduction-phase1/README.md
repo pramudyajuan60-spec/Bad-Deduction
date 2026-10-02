@@ -11,17 +11,27 @@ that emerge from the simulation instead of a scripted solution.
 
 ## Status
 
-**Phase 1 (Foundation) complete.** Deterministic RNG, game time, event bus + causal world-event log,
-versioned save/load with state hashing, location content, basic character/world state, and the
-truth-vs-player-view separation. 41 tests. No presentation layer yet (Phase 11).
+**Phases 1-3 complete.**
+* Phase 1 (Foundation): deterministic RNG, game time, event bus + causal world-event log, versioned
+  save/load with state hashing, location content, truth-vs-player-view separation.
+* Phase 2 (Characters): seeded cast generation (`session.Cast.Generate(new CastSpec())` → 17 civilians
+  + 5 police), households, personality, secrets, relationship graph, goals, and daily/day-off schedules
+  with travel-feasibility checks. Save format v2.
+
+* Phase 3 (Social): eight directed relationship axes per edge (trust, fear, respect, loyalty, suspicion,
+  influence, affection, resentment), `session.Social` (validated, logged changes + daily calming), the
+  police trust ladder, and `session.Compliance` (explainable "will they do it?" decisions where trust alone
+  never forces an action). Save format v3.
+
+96 tests. No presentation layer yet (Phase 11).
 
 ## Layout
 
 ```
 src/BadDeduction.Core/     engine-free simulation library (net8.0)
-  Core/  World/  Characters/  Content/
+  Core/  World/  Characters/  Social/  Content/
 tests/BadDeduction.Tests/  dependency-free test runner
-data/                      data-driven content (locations.json)
+data/                      data-driven content (locations, occupations, goals, character secrets, names)
 docs/                      audit, roadmap, decisions
 ```
 
@@ -37,6 +47,7 @@ dotnet run --project tests/BadDeduction.Tests -- Save    # only tests whose name
 
 ## Rules for contributors
 
+* Cast generation uses one named RNG stream per stage (`cast.people`, `cast.social`, ...); never draw from the sim RNG.
 * Simulation code must be deterministic: use `DeterministicRandom`, never `System.Random`,
   `DateTime.Now` or `Guid.NewGuid()`.
 * Trust/suspicion/confidence are integers.

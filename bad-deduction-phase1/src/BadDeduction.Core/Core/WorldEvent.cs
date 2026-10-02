@@ -42,4 +42,5 @@ public static class WorldEventTypes
     public const string RunStarted = "run.started";
     public const string DayStarted = "time.day_started";
     public const string CharacterMoved = "character.moved";
+    public const string RelationshipChanged = "social.relationship_changed";
 }

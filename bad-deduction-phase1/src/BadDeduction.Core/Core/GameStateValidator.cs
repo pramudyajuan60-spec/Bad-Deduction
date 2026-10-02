@@ -1,4 +1,7 @@
 using BadDeduction.Characters;
+using BadDeduction.Content;
+using BadDeduction.Social;
+using BadDeduction.World;
 
 namespace BadDeduction.Core;
 
@@ -28,6 +31,8 @@ public static class GameStateValidator
             if (c.WorkLocationId is not null && !state.World.Locations.ContainsKey(c.WorkLocationId))
                 errors.Add($"Character '{c.Id}' has unknown work location '{c.WorkLocationId}'.");
         }
+
+        errors.AddRange(ValidateCast(state));
 
         // Event log
         var log = state.EventLog;
@@ -66,6 +71,57 @@ public static class GameStateValidator
             }
         }
 
+        return errors;
+    }
+
+    private static IEnumerable<string> ValidateCast(GameState state)
+    {
+        var errors = new List<string>();
+        var w = state.World;
+
+        foreach (var (id, profile) in w.Profiles)
+        {
+            if (!w.Characters.ContainsKey(id)) errors.Add($"Profile exists for unknown character '{id}'.");
+            foreach (var t in profile.Personality.All())
+                if (t is < 0 or > 100) errors.Add($"Profile '{id}' has a personality trait outside 0-100.");
+            foreach (var g in profile.Goals)
+            {
+                if (g.Priority is < 0 or > 100) errors.Add($"Profile '{id}' has a goal priority outside 0-100.");
+                if (g.TargetId is not null && !w.Characters.ContainsKey(g.TargetId)) errors.Add($"Profile '{id}' has a goal aimed at unknown character '{g.TargetId}'.");
+            }
+        }
+
+        foreach (var id in w.Schedules.Keys)
+            if (!w.Characters.ContainsKey(id)) errors.Add($"Schedule exists for unknown character '{id}'.");
+
+        var seen = new HashSet<(string, string)>();
+        foreach (var e in w.Relationships)
+        {
+            if (!w.Characters.ContainsKey(e.From) || !w.Characters.ContainsKey(e.To)) errors.Add($"Relationship {e.From}->{e.To} references an unknown character.");
+            else if (e.From == e.To) errors.Add($"Relationship {e.From}->{e.To} points at itself.");
+            foreach (var axis in Social.SocialRules.AllAxes)
+                if (e.GetAxis(axis) is < 0 or > 100) errors.Add($"Relationship {e.From}->{e.To} has {axis} outside 0-100.");
+            if (!seen.Add((e.From, e.To))) errors.Add($"Duplicate relationship {e.From}->{e.To}.");
+        }
+        foreach (var (from, to) in seen)
+            if (!seen.Contains((to, from))) errors.Add($"Relationship {from}->{to} has no reverse edge.");
+        return errors;
+    }
+
+    /// <summary>Checks that need the loaded content: known goal/secret ids and travel-feasible schedules.</summary>
+    public static IEnumerable<string> ValidateAgainstContent(GameState state, ContentDatabase content)
+    {
+        var errors = new List<string>();
+        foreach (var (id, profile) in state.World.Profiles)
+        {
+            foreach (var g in profile.Goals)
+                if (!content.Goals.Any(d => d.Id == g.DefinitionId)) errors.Add($"Profile '{id}' has unknown goal '{g.DefinitionId}'.");
+            foreach (var sid in profile.SecretIds)
+                if (!content.Secrets.Any(d => d.Id == sid)) errors.Add($"Profile '{id}' has unknown secret '{sid}'.");
+        }
+        foreach (var (id, schedule) in state.World.Schedules)
+            if (state.World.Characters.TryGetValue(id, out var c))
+                errors.AddRange(ScheduleSystem.Check(id, c.HomeLocationId, schedule, content));
         return errors;
     }
 }
