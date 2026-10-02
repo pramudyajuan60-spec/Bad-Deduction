@@ -11,7 +11,7 @@ that emerge from the simulation instead of a scripted solution.
 
 ## Status
 
-**Phases 1-3 complete.**
+**Phases 1-4 complete.**
 * Phase 1 (Foundation): deterministic RNG, game time, event bus + causal world-event log, versioned
   save/load with state hashing, location content, truth-vs-player-view separation.
 * Phase 2 (Characters): seeded cast generation (`session.Cast.Generate(new CastSpec())` → 17 civilians
@@ -23,13 +23,18 @@ that emerge from the simulation instead of a scripted solution.
   police trust ladder, and `session.Compliance` (explainable "will they do it?" decisions where trust alone
   never forces an action). Save format v3.
 
-96 tests. No presentation layer yet (Phase 11).
+* Phase 4 (Cognition): `session.Cognition` — memories with daily decay/distortion, the 5-layer knowledge
+  model (truth / knows / believes / suspects / player-knows), beliefs with integer confidence + evidence
+  counts, contact-gated rumor spread (telephone game), and a knowledge-gated player journal.
+  Save format v4.
+
+129 tests. No presentation layer yet (Phase 11).
 
 ## Layout
 
 ```
 src/BadDeduction.Core/     engine-free simulation library (net8.0)
-  Core/  World/  Characters/  Social/  Content/
+  Core/  World/  Characters/  Social/  Cognition/  Content/
 tests/BadDeduction.Tests/  dependency-free test runner
 data/                      data-driven content (locations, occupations, goals, character secrets, names)
 docs/                      audit, roadmap, decisions

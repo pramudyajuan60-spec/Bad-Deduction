@@ -159,6 +159,68 @@ carry no social history). The validator rejects any axis outside 0-100.
   `data/occupations.json`; baselines use kind and personality only.
 * Tuning constants live in `SocialRules` / `SocialBaselines`; move them to `data/` when balancing starts (§61).
 
+---
+
+# Phase 4 — Memory, knowledge, beliefs, rumors
+
+```
+CognitionService (session.Cognition) ── the only sanctioned mutator of CognitionState
+  Perceive ── THE knowledge gate: grants KnownEvents + stores a MemoryEntry + journals for the player
+  TellRumor ── contact-gated (same location or a relationship edge); telephone-game degradation
+  AddEvidence ── integer evidence counts -> confidence; band transitions logged
+  ApplyDailyDecay ── DayChanged subscription: silent fading, one-shot distortion, foggy floor
+CognitionState (on GameState) ── NextMemoryId · CognitionRng · Memories · Beliefs · KnownEvents · PlayerJournal
+PlayerView ── KnownEventIds / JournalEntries: the knowledge-gated "player knows" layer
+```
+
+## ADR-016 — Knowledge has exactly one gate: Perceive
+`KnownEvents[character]` (the "knows" layer) is written only by `CognitionService.Perceive`; `TellRumor`
+routes through the same gate. Nothing else in the codebase may grant knowledge, so "an NPC cannot know
+what it never received" holds by construction, not by convention — the exit criterion is a structural
+property, and a test pins it. Perceive is idempotent: re-perceiving a known event changes nothing.
+
+## ADR-017 — The five knowledge layers have five homes
+Audit §B's layers map to: truth → `WorldTruth` (never read by cognition code), "knows" → `KnownEvents`,
+"believes"/"suspects" → `Beliefs` confidence bands (≥60 believes, 40-59 suspects, <40 dismissed),
+"player knows" → `PlayerJournal`, read only through `PlayerView.KnownEventIds()/JournalEntries()`.
+`IsFoggy` is derived from confidence (never stored), per the "no derived data" rule.
+
+## ADR-018 — Belief math is integer, documented, and explainable
+`confidence = clamp(50 + 8·(for − against), 5, 95)`: one supporting item (58) is a suspicion, two (66) a
+belief, two refuting items (34) a dismissal; clamping means no belief is ever absolute or impossible.
+Only band *transitions* are logged (`cognition.belief_changed` with for/against counts); quiet
+accumulation stays in state. A belief is therefore always explainable as "N for, M against".
+
+## ADR-019 — Rumors need contact and degrade like a telephone game
+`TellRumor` requires the teller to know the event and the pair to have met (same `CurrentLocationId`
+or a relationship edge in either direction) — otherwise it throws. Each hop loses 0-15 confidence and
+has a 50% chance to garble the retelling ("[retold]" prefix), drawn from the cognition RNG stream.
+The spread is logged as `cognition.rumor_spread` with a `CausedBy` link, extending the causal chain.
+
+## ADR-020 — Memories fade silently, distort once, and never vanish
+Daily decay on `DayChanged`: witnessed −2/day, told/inferred −4/day, floored at 5 (a trace always
+remains). The first time confidence sinks below 40, one RNG roll (50%) may distort the memory
+("[hazy]" prefix, `IsDistorted` set — never retried, never stacked). Decay is silent like social drift
+(ADR-013): no per-memory log spam. Starting confidence: witnessed 90, told 70, inferred 55.
+
+## ADR-021 — Cognition has its own persisted RNG stream
+`CognitionState.CognitionRng` is derived from the run seed (`"cognition.memory"`) at `NewRun` and
+persisted in the save, so rumor/distortion draws neither shift the main sim stream (ADR-002) nor
+diverge after save/load — proven by a save→continue hash-identity test. The v3→v4 migration derives
+the same stream from the old save's run seed, so migrated saves keep working deterministically.
+
+## Save format v4
+Adds `State.Cognition` (memories, beliefs, known events, journal, cognition RNG). Migration v3→v4
+initializes empty containers plus the derived RNG stream. The validator checks: memory id range and
+uniqueness, character/event references, confidence 0-100, non-empty summaries and propositions,
+non-negative evidence counts, and a non-zero cognition RNG.
+
+## Deferred / known limits
+* Memories are never forgotten outright (floor 5); Phase 5+ may add consolidation/pruning caps.
+* `TellRumor` re-telling to someone who already knows is a no-op; reinforcement ("heard it twice")
+  is future work.
+* Belief bands feed `ComplianceEvaluator.extraFactors` in Phase 6 (dialogue), per ADR-014's plan.
+
 ## Note — why the secrets data file is called `character_secrets.json`
 The Phase 2 patch shipped without its secrets data because `.gitignore` (rightly) ignores `secrets.json`
 as a credentials pattern, so the file was silently never committed and 61 of 74 tests failed on a fresh

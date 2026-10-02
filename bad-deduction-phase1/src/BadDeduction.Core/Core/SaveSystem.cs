@@ -26,7 +26,7 @@ public sealed class SaveEnvelope
 public static class SaveSystem
 {
     public const string GameId = "BadDeduction";
-    public const int CurrentFormatVersion = 3;
+    public const int CurrentFormatVersion = 4;
 
     /// <summary>Migrations keyed by the version they upgrade FROM (operate on the raw JSON tree).</summary>
     private static readonly Dictionary<int, Action<JsonNode>> Migrations = new()
@@ -52,6 +52,20 @@ public static class SaveSystem
                 foreach (var axis in Social.SocialRules.AllAxes)
                     edge[axis.ToString()] = resting[(int)axis];
             }
+        },
+        // v3 -> v4 (Phase 4): runs gain the cognition state (memories, beliefs, knowledge, journal).
+        // Old saves get empty containers plus a valid cognition RNG stream derived from their run seed,
+        // so post-migration rumor/distortion draws are deterministic and never touch the sim stream.
+        [3] = root =>
+        {
+            if (root["State"] is not JsonObject state) return;
+            if (state["Cognition"] is not null) return;
+            var seed = state["Meta"]?["RunSeed"]?.GetValue<ulong>() ?? 0;
+            var cognition = new Cognition.CognitionState
+            {
+                CognitionRng = DeterministicRandom.Derive(seed, "cognition.memory").Snapshot(),
+            };
+            state["Cognition"] = JsonSerializer.SerializeToNode(cognition, Compact);
         },
     };
 

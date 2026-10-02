@@ -33,6 +33,7 @@ public static class GameStateValidator
         }
 
         errors.AddRange(ValidateCast(state));
+        errors.AddRange(ValidateCognition(state));
 
         // Event log
         var log = state.EventLog;
@@ -105,6 +106,56 @@ public static class GameStateValidator
         }
         foreach (var (from, to) in seen)
             if (!seen.Contains((to, from))) errors.Add($"Relationship {from}->{to} has no reverse edge.");
+        return errors;
+    }
+
+    private static IEnumerable<string> ValidateCognition(GameState state)
+    {
+        var errors = new List<string>();
+        var cog = state.Cognition;
+        if (cog.NextMemoryId < 1) errors.Add("Cognition.NextMemoryId is less than 1.");
+        if (cog.CognitionRng.IsZero) errors.Add("Cognition.CognitionRng state is all zero.");
+
+        var seenIds = new HashSet<long>();
+        foreach (var (charId, list) in cog.Memories)
+        {
+            if (!state.World.Characters.ContainsKey(charId)) errors.Add($"Memories exist for unknown character '{charId}'.");
+            foreach (var m in list)
+            {
+                if (m.Id < 1 || m.Id >= cog.NextMemoryId) errors.Add($"Memory {m.Id} for '{charId}' has an id outside the valid range.");
+                if (!seenIds.Add(m.Id)) errors.Add($"Duplicate memory id {m.Id}.");
+                if (m.CharacterId != charId) errors.Add($"Memory {m.Id} is filed under '{charId}' but belongs to '{m.CharacterId}'.");
+                if (string.IsNullOrWhiteSpace(m.Summary)) errors.Add($"Memory {m.Id} has an empty summary.");
+                if (m.Confidence is < 0 or > 100) errors.Add($"Memory {m.Id} has confidence outside 0-100.");
+                if (m.EventId is { } eid && !state.EventLog.TryGet(eid, out _)) errors.Add($"Memory {m.Id} references unknown event {eid}.");
+                if (m.RecordedAt < 0 || m.RecordedAt > state.TotalMinutes) errors.Add($"Memory {m.Id} has an impossible timestamp.");
+            }
+        }
+
+        foreach (var (charId, list) in cog.Beliefs)
+        {
+            if (!state.World.Characters.ContainsKey(charId)) errors.Add($"Beliefs exist for unknown character '{charId}'.");
+            var seenProps = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var b in list)
+            {
+                if (string.IsNullOrWhiteSpace(b.PropositionId)) errors.Add($"Character '{charId}' has a belief with an empty proposition id.");
+                if (!seenProps.Add(b.PropositionId)) errors.Add($"Character '{charId}' has a duplicate belief '{b.PropositionId}'.");
+                if (b.Confidence is < 0 or > 100) errors.Add($"Belief '{b.PropositionId}' has confidence outside 0-100.");
+                if (b.EvidenceFor < 0 || b.EvidenceAgainst < 0) errors.Add($"Belief '{b.PropositionId}' has negative evidence counts.");
+                if (b.UpdatedAt < 0 || b.UpdatedAt > state.TotalMinutes) errors.Add($"Belief '{b.PropositionId}' has an impossible timestamp.");
+            }
+        }
+
+        foreach (var (charId, known) in cog.KnownEvents)
+        {
+            if (!state.World.Characters.ContainsKey(charId)) errors.Add($"KnownEvents exist for unknown character '{charId}'.");
+            foreach (var eid in known)
+                if (!state.EventLog.TryGet(eid, out _)) errors.Add($"KnownEvents for '{charId}' references unknown event {eid}.");
+        }
+
+        foreach (var eid in cog.PlayerJournal)
+            if (!state.EventLog.TryGet(eid, out _)) errors.Add($"PlayerJournal references unknown event {eid}.");
+
         return errors;
     }
 

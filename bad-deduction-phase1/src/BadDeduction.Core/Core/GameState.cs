@@ -44,6 +44,9 @@ public sealed class GameState
     public EventLog EventLog { get; set; } = new();
     public PlayerState Player { get; set; } = new();
 
-    // Phases 4+ add: Knowledge/Beliefs/Memory, Relationships, Rumors, Evidence, CrimeScenes,
+    /// <summary>Phase 4: what characters know, remember and believe (plain data; see CognitionService).</summary>
+    public Cognition.CognitionState Cognition { get; set; } = new();
+
+    // Phases 5+ add: Rumors (network spread is Phase 4; done), Evidence, CrimeScenes,
     // Police, Hypotheses, Surveillance, Timeline. Each addition bumps SaveSystem.CurrentFormatVersion.
 }

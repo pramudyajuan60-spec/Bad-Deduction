@@ -1,4 +1,5 @@
 using BadDeduction.Characters;
+using BadDeduction.Cognition;
 using BadDeduction.Content;
 using BadDeduction.Social;
 using BadDeduction.World;
@@ -21,6 +22,7 @@ public sealed class GameSession
     public RelationshipGraph Relationships { get; }
     public SocialService Social { get; }
     public ComplianceEvaluator Compliance { get; }
+    public CognitionService Cognition { get; }
     public CastGenerator Cast { get; }
     public PlayerView View { get; }
     public DebugAccess Debug { get; }
@@ -40,6 +42,7 @@ public sealed class GameSession
         Relationships = new RelationshipGraph(state);
         Social = new SocialService(state, Events, Relationships);
         Compliance = new ComplianceEvaluator(state, Social);
+        Cognition = new CognitionService(state, Events, Relationships);
         Cast = new CastGenerator(state, content, World, Relationships);
         View = new PlayerView(state);
         Debug = new DebugAccess(state);
@@ -59,6 +62,9 @@ public sealed class GameSession
             TotalMinutes = (start ?? GameTime.At(1, 6)).TotalMinutes,
             SimRng = DeterministicRandom.Derive(runSeed, "sim").Snapshot(),
         };
+        // Cognition gets its own persisted RNG stream so rumor/distortion draws never shift the
+        // main simulation stream (ADR-002) and continue identically after save/load.
+        state.Cognition.CognitionRng = DeterministicRandom.Derive(runSeed, "cognition.memory").Snapshot();
         foreach (var def in content.Locations)
             state.World.Locations[def.Id] = new LocationState { Id = def.Id };
 

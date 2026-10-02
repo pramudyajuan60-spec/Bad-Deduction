@@ -43,4 +43,7 @@ public static class WorldEventTypes
     public const string DayStarted = "time.day_started";
     public const string CharacterMoved = "character.moved";
     public const string RelationshipChanged = "social.relationship_changed";
+    public const string MemoryRecorded = "cognition.memory_recorded";
+    public const string RumorSpread = "cognition.rumor_spread";
+    public const string BeliefChanged = "cognition.belief_changed";
 }
