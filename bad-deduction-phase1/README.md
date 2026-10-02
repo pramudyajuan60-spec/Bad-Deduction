@@ -37,7 +37,8 @@ that emerge from the simulation instead of a scripted solution.
   pipeline. Prompts are built from one NPC's knowledge only (never truth); a deterministic
   `MockAIProvider` is the CI baseline; every exchange (accepted or fallback) is stored as a
   `dialogue.exchanged` world event, so the sim never re-calls the provider on load. No save-format
-  change (conversations are transient).
+  change (conversations are transient). Opt-in **Ollama provider** (`OllamaDialogueProvider`,
+  local LLM, same validator, silent mock fallback when unreachable) — see `docs/OLLAMA_SETUP.md`.
 
 * Phase 7 (Crime): `session.Crime` — data-driven `CrimeDefinition`s (`data/crimes.json`: murder as
   the first-class type, arson as a variant), seeded incident generation (victim never the player),
@@ -85,7 +86,7 @@ that emerge from the simulation instead of a scripted solution.
   contradiction gap, ~29 s). Slice bible: [`docs/VERTICAL_SLICE.md`](docs/VERTICAL_SLICE.md).
   No save-format change.
 
-313 tests. Presentation layer: `godot/` (Godot 4.7 .NET project, 10 panels, playable
+324 tests. Presentation layer: `godot/` (Godot 4.7 .NET project, 10 panels, playable
 Day 1–7 loop with the Mock provider — requires the Godot 4.7.2-stable .NET editor;
 see `godot/README.md`).
 

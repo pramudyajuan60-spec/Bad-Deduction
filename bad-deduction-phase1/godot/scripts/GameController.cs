@@ -21,6 +21,13 @@ public partial class GameController : Node
 
     private string _selectedNpcId = "";
 
+    /// <summary>Dialogue backend for runs. Mock (default) is deterministic; Ollama is opt-in via the New Run panel.</summary>
+    public DialogueProviderKind ProviderKind { get; set; } = DialogueProviderKind.Mock;
+    /// <summary>Ollama model tag, used when <see cref="ProviderKind"/> is Ollama.</summary>
+    public string OllamaModel { get; set; } = "llama3.1:8b";
+    /// <summary>Ollama server base URL, used when <see cref="ProviderKind"/> is Ollama.</summary>
+    public string OllamaEndpoint { get; set; } = "http://localhost:11434";
+
     /// <summary>Currently inspected NPC (shared across panels).</summary>
     public string SelectedNpcId
     {
@@ -51,7 +58,8 @@ public partial class GameController : Node
     public void NewRun(ulong seed, Campaign campaign, Difficulty difficulty)
     {
         Content = ContentDatabase.LoadFromDirectory(DataDir());
-        var session = GameSession.NewRun(seed, campaign, difficulty, Content);
+        var provider = DialogueProviderFactory.Create(ProviderKind, seed, OllamaModel, OllamaEndpoint);
+        var session = GameSession.NewRun(seed, campaign, difficulty, Content, dialogueProvider: provider);
         // NOTE: Cast.Generate requires an EMPTY world — run it before adding the player.
         session.Cast.Generate(new CastSpec());
         session.World.AddCharacter(new CharacterState
@@ -108,7 +116,12 @@ public partial class GameController : Node
     public void LoadRun(string name)
     {
         Content ??= ContentDatabase.LoadFromDirectory(DataDir());
-        Session = GameSession.Load(System.IO.Path.Combine(SaveDir(), name + ".json"), Content);
+        var path = System.IO.Path.Combine(SaveDir(), name + ".json");
+        // The provider choice is UI-session state (not saved): re-read the seed so the
+        // mock fallback inside an Ollama provider matches the run, like a fresh NewRun.
+        var seed = SaveSystem.ReadFile(path).Meta.RunSeed;
+        Session = GameSession.Load(path, Content,
+            DialogueProviderFactory.Create(ProviderKind, seed, OllamaModel, OllamaEndpoint));
         SelectedNpcId = "";
         EmitSignal(SignalName.RunStarted);
     }

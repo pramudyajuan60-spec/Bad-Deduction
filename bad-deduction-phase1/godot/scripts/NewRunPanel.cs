@@ -9,6 +9,10 @@ public partial class NewRunPanel : PanelContainer, IPanel
     private LineEdit _seedEdit = null!;
     private OptionButton _campaignOpt = null!;
     private OptionButton _difficultyOpt = null!;
+    private OptionButton _providerOpt = null!;
+    private LineEdit _modelEdit = null!;
+    private LineEdit _endpointEdit = null!;
+    private Control _ollamaRows = null!;
     private OptionButton _loadOpt = null!;
     private Button _loadButton = null!;
 
@@ -59,6 +63,38 @@ public partial class NewRunPanel : PanelContainer, IPanel
         diffRow.AddChild(_difficultyOpt);
         vb.AddChild(diffRow);
 
+        var provRow = new HBoxContainer();
+        provRow.AddChild(new Label { Text = "Dialogue AI:", CustomMinimumSize = new Vector2(110, 0) });
+        _providerOpt = new OptionButton { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _providerOpt.AddItem("Scripted (deterministic)", 0);
+        _providerOpt.AddItem("Ollama (local LLM)", 1);
+        _providerOpt.ItemSelected += OnProviderSelected;
+        provRow.AddChild(_providerOpt);
+        vb.AddChild(provRow);
+        vb.AddChild(UiTheme.DimLabel("Scripted is the replay-safe default. Ollama needs the app running (see docs/OLLAMA_SETUP.md); if it is unreachable, dialogue quietly falls back to scripted."));
+
+        _ollamaRows = new VBoxContainer();
+        var modelRow = new HBoxContainer();
+        modelRow.AddChild(new Label { Text = "Model:", CustomMinimumSize = new Vector2(110, 0) });
+        _modelEdit = new LineEdit
+        {
+            Text = "llama3.1:8b",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+        };
+        modelRow.AddChild(_modelEdit);
+        _ollamaRows.AddChild(modelRow);
+        var endpointRow = new HBoxContainer();
+        endpointRow.AddChild(new Label { Text = "Endpoint:", CustomMinimumSize = new Vector2(110, 0) });
+        _endpointEdit = new LineEdit
+        {
+            Text = "http://localhost:11434",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+        };
+        endpointRow.AddChild(_endpointEdit);
+        _ollamaRows.AddChild(endpointRow);
+        _ollamaRows.Visible = false;
+        vb.AddChild(_ollamaRows);
+
         var start = new Button { Text = "Begin the Investigation" };
         start.AddThemeFontSizeOverride("font_size", 20);
         start.Pressed += OnStart;
@@ -85,13 +121,19 @@ public partial class NewRunPanel : PanelContainer, IPanel
         _loadOpt.Disabled = saves.Count == 0;
     }
 
+    private void OnProviderSelected(long index) => _ollamaRows.Visible = index == 1;
+
     private void OnStart()
     {
         if (!ulong.TryParse(_seedEdit.Text.Trim(), out var seed))
             seed = (ulong)new System.Random().Next(1, 999999);
         var campaign = _campaignOpt.Selected == 1 ? Campaign.Malvr : Campaign.Lumiel;
         var difficulty = (Difficulty)_difficultyOpt.Selected;
-        GameController.Instance.NewRun(seed, campaign, difficulty);
+        var g = GameController.Instance;
+        g.ProviderKind = _providerOpt.Selected == 1 ? DialogueProviderKind.Ollama : DialogueProviderKind.Mock;
+        g.OllamaModel = _modelEdit.Text.Trim();
+        g.OllamaEndpoint = _endpointEdit.Text.Trim();
+        g.NewRun(seed, campaign, difficulty);
     }
 
     private void OnLoad()

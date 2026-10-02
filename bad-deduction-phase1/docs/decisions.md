@@ -811,3 +811,52 @@ Single-seed 7-day run ≈ 143 ms; the 200-seed metrics suite finishes in ~29 s
 (CI budget <10 min). No optimization was needed; per-minute sim ticks over
 ~10,440 minutes × 22 characters stay cheap because idle re-evaluation is already
 gated. Measured 2026-10-02 on the dev machine; re-measure on CI.
+
+### ADR-064 — Ollama as the local LLM provider (user choice)
+The user playtested and confirmed all dialogue is templates (the mock). Given the
+cloud-vs-local choice, they picked **Ollama**: free, local, no API key, no data
+leaving the machine. Rationale recorded: privacy-by-default fits a game about
+secrets, and zero cost removes the hosting question for a vertical slice. Cloud
+providers remain possible later — the provider slot is interface-based.
+
+### ADR-065 — Ollama provider: same slot, same prompt, sync contract kept
+`BadDeduction.AI.OllamaDialogueProvider` implements the existing `IAIProvider`
+(drop-in). It sends `AIRequest.ContextPrompt` VERBATIM as the single user message
+to `POST {endpoint}/api/chat` (`stream: false`); it never invents prompt content,
+so ContextEngine's truth/knowledge separation holds unchanged (pinned by a
+prompt-parity test: outgoing body content == the request's ContextPrompt, plus the
+role-word leak check). Pure BCL (`HttpClient` + `System.Text.Json`) — Core stays
+dependency-free. The interface is synchronous (ADR-027), so the provider blocks on
+the async HttpClient API via `GetAwaiter().GetResult()`; this is deadlock-safe
+because HttpClient never marshals continuations back to a sync context, and unlike
+`HttpClient.Send` it works with ANY `HttpMessageHandler` (the sync `Send` virtual
+has no default delegation and throws `NotSupportedException` — found via a failing
+test, fixed, test added).
+
+### ADR-066 — Fallback policy: any failure → mock, never crash
+On ANY transport or content failure (not running, timeout, non-2xx, malformed
+JSON, empty/unparseable content) the provider delegates to its fallback
+(normally the mock) and marks the result `AIResponse.UsedFallback = true`
+(additive flag; the mock never sets it). The orchestrator copies it to
+`DialogueResult.UsedFallback`, which the Godot UI shows as an "(offline dialogue)"
+chip. The game NEVER throws or hangs because Ollama is missing. Distinction kept
+deliberate: `UsedFallback` = "the model was unreachable" (offline indicator),
+`FallbackReason` = "output refused/rejected/budget" (deflected indicator).
+
+### ADR-067 — Determinism boundary: replay hashes hold only with the mock
+With Ollama active, dialogue output is inherently non-deterministic, so identical
+seeds no longer produce identical state hashes. The mock REMAINS THE DEFAULT;
+Ollama is opt-in per run from the New Run panel (provider choice is UI-session
+state, not saved — loading a save re-applies the current panel selection, with
+the run seed re-read so the mock fallback matches). Mock-driven CI is unaffected:
+all 324 tests use the mock or fake handlers; no test ever hits a real server.
+
+### ADR-068 — Default model and parser judgment calls
+Default `llama3.1:8b`: the best quality/size trade-off widely available in Ollama
+at the time; any tag works via settings (lighter: `llama3.2:3b`, `qwen2.5:7b`).
+Free-text parsing is lenient and line-based (reply = text before the first
+`trust_delta:`/`suspicion_delta:`/`new_facts:`/`memory_summary:`/`relationship_note:`
+header; missing fields degrade to zero deltas, not refusal). The provider does
+NOT truncate over-long fields — over-length stays the validator's documented
+rejection, keeping one gate for output shape. `new_facts` splits on newlines and
+semicolons only (never commas, which appear inside facts).

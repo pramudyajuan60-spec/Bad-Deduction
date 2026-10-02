@@ -62,15 +62,17 @@ public sealed class GameSession
 
     /// <summary>
     /// Phase 6: the dialogue pipeline (Orchestrator → ContextEngine → provider → validator).
-    /// The provider is the deterministic mock; the forbidden phrases are derived from hidden
-    /// roles HERE, outside the AI namespace, so no truth type ever crosses into it.
+    /// The provider defaults to the deterministic mock; callers (e.g. the Godot UI) may pass
+    /// an <see cref="OllamaDialogueProvider"/> instead — the orchestrator and
+    /// validator treat every provider identically. The forbidden phrases are derived from
+    /// hidden roles HERE, outside the AI namespace, so no truth type ever crosses into it.
     /// </summary>
     public DialogueOrchestrator Dialogue { get; }
 
     /// <summary>The main simulation RNG. Wraps State.SimRng, so it is always in sync with saves.</summary>
     public DeterministicRandom Rng { get; }
 
-    private GameSession(GameState state, ContentDatabase content)
+    private GameSession(GameState state, ContentDatabase content, IAIProvider? dialogueProvider = null)
     {
         State = state;
         Content = content;
@@ -100,7 +102,7 @@ public sealed class GameSession
             id => state.World.Characters[id].CurrentLocationId);
         Dialogue = new DialogueOrchestrator(
             context,
-            new MockAIProvider(state.Meta.RunSeed),
+            dialogueProvider ?? new MockAIProvider(state.Meta.RunSeed),
             new DialogueValidator(),
             Cognition, Social, Events,
             id => state.World.Characters[id].CurrentLocationId,
@@ -136,7 +138,8 @@ public sealed class GameSession
         Campaign campaign,
         Difficulty difficulty,
         ContentDatabase content,
-        GameTime? start = null)
+        GameTime? start = null,
+        IAIProvider? dialogueProvider = null)
     {
         var state = new GameState
         {
@@ -156,7 +159,7 @@ public sealed class GameSession
         foreach (var def in content.Locations)
             state.World.Locations[def.Id] = new LocationState { Id = def.Id };
 
-        var session = new GameSession(state, content);
+        var session = new GameSession(state, content, dialogueProvider);
         session.Events.Record(
             WorldEventTypes.RunStarted,
             data: new Dictionary<string, string>
@@ -168,7 +171,7 @@ public sealed class GameSession
         return session;
     }
 
-    public static GameSession FromState(GameState state, ContentDatabase content)
+    public static GameSession FromState(GameState state, ContentDatabase content, IAIProvider? dialogueProvider = null)
     {
         var errors = GameStateValidator.Validate(state).ToList();
         foreach (var id in state.World.Locations.Keys)
@@ -178,11 +181,11 @@ public sealed class GameSession
         errors.AddRange(GameStateValidator.ValidateAgainstContent(state, content));
         if (errors.Count > 0)
             throw new SaveFormatException("State failed validation:\n - " + string.Join("\n - ", errors));
-        return new GameSession(state, content);
+        return new GameSession(state, content, dialogueProvider);
     }
 
-    public static GameSession Load(string path, ContentDatabase content) =>
-        FromState(SaveSystem.ReadFile(path), content);
+    public static GameSession Load(string path, ContentDatabase content, IAIProvider? dialogueProvider = null) =>
+        FromState(SaveSystem.ReadFile(path), content, dialogueProvider);
 
     public void Save(string path) => SaveSystem.WriteFile(path, State);
 

@@ -113,7 +113,7 @@ dotnet run --project tests/BadDeduction.Tests -- "VerticalSlice"
 ```
 
 The 200-seed metrics test takes ~30 s. The full suite (`dotnet run --project
-tests/BadDeduction.Tests`) runs everything: 313 tests.
+tests/BadDeduction.Tests`) runs everything: 324 tests.
 
 ## Deferred (still)
 

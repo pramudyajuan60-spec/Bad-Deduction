@@ -40,12 +40,18 @@ public sealed class DialogueOutput
 /// <summary>
 /// A provider result is either an accepted-shaped output or a refusal. Refusal is a normal
 /// result (risk 5), never an exception: the orchestrator falls back deterministically.
+/// <para/>
+/// <see cref="UsedFallback"/> marks results that came from a provider's own internal
+/// fallback (e.g. the Ollama provider delegating to the mock when the local model is
+/// unreachable). Additive: the mock never sets it, so it defaults to false.
 /// </summary>
 public sealed class AIResponse
 {
     public bool Refused { get; set; }
     public DialogueOutput? Output { get; set; }
     public string? RefusalReason { get; set; }
+    /// <summary>True when this result was produced by the provider's fallback path.</summary>
+    public bool UsedFallback { get; set; }
 
     public static AIResponse Accept(DialogueOutput output) =>
         new() { Output = output ?? throw new ArgumentNullException(nameof(output)) };

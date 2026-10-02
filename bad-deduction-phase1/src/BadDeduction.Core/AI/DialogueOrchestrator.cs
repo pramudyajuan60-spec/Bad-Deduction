@@ -16,6 +16,8 @@ public sealed class DialogueResult
     /// <summary>Deltas carried by the accepted output (validator-clamped; the social layer may clamp further at axis bounds).</summary>
     public int TrustDelta { get; set; }
     public int SuspicionDelta { get; set; }
+    /// <summary>True when the provider fell back internally (e.g. Ollama unreachable → mock). Drives the UI's "offline dialogue" indicator.</summary>
+    public bool UsedFallback { get; set; }
 }
 
 /// <summary>
@@ -106,6 +108,7 @@ public sealed class DialogueOrchestrator
         string replyText;
         DialogueOutput? applied = null;
         string? fallbackReason = null;
+        var usedFallback = false;
 
         if (budgetLeft <= 0)
         {
@@ -131,6 +134,7 @@ public sealed class DialogueOrchestrator
             };
 
             var response = _provider.Complete(request);
+            usedFallback = !response.Refused && response.UsedFallback;
             if (response.Refused)
             {
                 fallbackReason = $"provider refused: {response.RefusalReason ?? "no reason given"}";
@@ -193,6 +197,7 @@ public sealed class DialogueOrchestrator
             FallbackReason = fallbackReason,
             TrustDelta = applied?.TrustDelta ?? 0,
             SuspicionDelta = applied?.SuspicionDelta ?? 0,
+            UsedFallback = usedFallback,
         };
     }
 

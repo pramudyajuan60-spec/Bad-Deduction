@@ -104,6 +104,8 @@ public partial class DialoguePanel : PanelContainer, IPanel
             result.SuspicionDelta >= 0 ? UiTheme.Red : UiTheme.Green);
         if (result.FallbackReason is not null)
             AddChip("(deflected)", UiTheme.Dim);
+        if (result.UsedFallback)
+            AddChip("(offline dialogue)", UiTheme.Dim);
 
         // Relationship may have moved — refresh the band line.
         var rel = s.Social.View("c_player", npcId);
