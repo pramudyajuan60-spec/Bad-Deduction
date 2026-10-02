@@ -11,7 +11,7 @@ that emerge from the simulation instead of a scripted solution.
 
 ## Status
 
-**Phases 1-6 complete.**
+**Phases 1-7 complete.**
 * Phase 1 (Foundation): deterministic RNG, game time, event bus + causal world-event log, versioned
   save/load with state hashing, location content, truth-vs-player-view separation.
 * Phase 2 (Characters): seeded cast generation (`session.Cast.Generate(new CastSpec())` → 17 civilians
@@ -39,15 +39,21 @@ that emerge from the simulation instead of a scripted solution.
   `dialogue.exchanged` world event, so the sim never re-calls the provider on load. No save-format
   change (conversations are transient).
 
-186 tests. No presentation layer yet (Phase 11).
+* Phase 7 (Crime): `session.Crime` — data-driven `CrimeDefinition`s (`data/crimes.json`: murder as
+  the first-class type, arson as a variant), seeded incident generation (victim never the player),
+  sealed scenes, evidence with structurally immutable authenticity (false evidence can never become
+  true), arrival-driven discovery through the Phase 4 knowledge gate, derived witnesses, and a
+  causal timeline view. Save format v6.
+
+214 tests. No presentation layer yet (Phase 11).
 
 ## Layout
 
 ```
 src/BadDeduction.Core/     engine-free simulation library (net8.0)
-  Core/  World/  Characters/  Social/  Cognition/  Content/  AI/
+  Core/  World/  Characters/  Social/  Cognition/  Content/  AI/  Crime/
 tests/BadDeduction.Tests/  dependency-free test runner
-data/                      data-driven content (locations, occupations, goals, character secrets, names)
+data/                      data-driven content (locations, occupations, goals, character secrets, names, crimes)
 docs/                      audit, roadmap, decisions
 ```
 

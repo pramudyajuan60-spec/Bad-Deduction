@@ -26,7 +26,7 @@ public sealed class SaveEnvelope
 public static class SaveSystem
 {
     public const string GameId = "BadDeduction";
-    public const int CurrentFormatVersion = 5;
+    public const int CurrentFormatVersion = 6;
 
     /// <summary>Migrations keyed by the version they upgrade FROM (operate on the raw JSON tree).</summary>
     private static readonly Dictionary<int, Action<JsonNode>> Migrations = new()
@@ -73,6 +73,20 @@ public static class SaveSystem
         {
             if (root["State"]?["World"] is not JsonObject world) return;
             world["ActiveTravels"] ??= new JsonObject();
+        },
+        // v5 -> v6 (Phase 7): runs gain the crime state (crimes, scenes, evidence). Old saves get
+        // empty containers plus a valid crime RNG stream derived from their run seed, so
+        // post-migration incident generation is deterministic and never touches the sim stream.
+        [5] = root =>
+        {
+            if (root["State"] is not JsonObject state) return;
+            if (state["Crime"] is not null) return;
+            var seed = state["Meta"]?["RunSeed"]?.GetValue<ulong>() ?? 0;
+            var crime = new Crime.CrimeState
+            {
+                CrimeRng = DeterministicRandom.Derive(seed, "crime.incident").Snapshot(),
+            };
+            state["Crime"] = JsonSerializer.SerializeToNode(crime, Compact);
         },
     };
 

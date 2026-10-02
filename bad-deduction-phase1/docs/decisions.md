@@ -389,3 +389,84 @@ same invariant — no `GameState`/`WorldTruth`/`DebugAccess` in any `BadDeductio
 signature — with far less build complexity, and it fails loudly the moment someone adds a
 violating member. An assembly split remains an option if engine-side code ever needs the same
 guarantee, but nothing in Phase 6 justified the packaging cost.
+
+---
+
+# Phase 7 — Crime
+
+```
+CrimeService (session.Crime) ── the only sanctioned mutator of CrimeState
+  GenerateIncident ── data-driven CrimeDefinition -> victim (never the player) -> sealed scene
+                      + evidence with drawn, immutable authenticity; own RNG stream
+  CheckDiscovery ── arrival-driven via the WorldEventRecorded bus (character.moved);
+                     discovery delay honored; witnesses Perceive through the Phase 4 gate
+  DiscoverEvidence ── knowledge-gated: you cannot investigate what you never heard of
+  GetWitnesses ── derived from KnownEvents (living perceivers only); query-only
+  GetTimeline ── incident -> discovery -> evidence discoveries, time-ordered, causal
+CrimeState (on GameState) ── CrimeRng · NextCrimeId/NextEvidenceId · Crimes · Scenes · Evidence
+data/crimes.json ── murder (first-class, fatal) + arson (variant, surviving victim)
+```
+
+## ADR-034 — Incidents are data, victims are drawn, the player is never eligible
+`CrimeDefinition` (`data/crimes.json`) carries victim kinds, fatality, location tags, the discovery
+delay and evidence templates — the slice incident is data, not code (audit §C-2). Victim selection
+is a seeded draw over living non-player characters (preferred at tag-matching locations, with a
+documented fallback to anyone eligible), so the same seed always yields the same incident. The
+player character is excluded structurally, whatever the definition says. Nothing in the draw reads
+`WorldTruth`: role assignments cannot change the incident, pinned by a test (ADR-003/ADR-015).
+
+## ADR-035 — Authenticity is immutable by construction
+`Evidence.Authenticity` has no setter and no method anywhere assigns it; it is fixed by the
+`[JsonConstructor]` on load and by the weighted draw at creation. "False evidence never auto-becomes
+true" is therefore a structural property: the test suite asserts the missing setter via reflection
+and runs every public mutator (discovery, evidence examination, rumor, 20k minutes of decay) over a
+false item without it changing. A hand-tampered save (unknown authenticity string) fails loudly at
+deserialization through the strict schema (ADR-005).
+
+## ADR-036 — Discovery rides the arrival bus
+`CrimeService` subscribes to `WorldEventRecorded` and runs `CheckDiscovery` on every
+`character.moved` event — so the Phase 5 simulation and hand-driven moves (tests, later UI) discover
+scenes with identical semantics, and `WorldSimulation` needed no changes. Discovery requires: a
+living character, an undiscovered scene at their location, and the definition's discovery delay
+elapsed. On discovery, `crime.discovered` is recorded (CausedBy → the incident) and everyone
+present perceives the incident through the Phase 4 gate — the discoverer, the other witnesses and
+the future timeline all flow from that one gate (ADR-016/ADR-025).
+
+## ADR-037 — Evidence examination is knowledge-gated
+`DiscoverEvidence` requires the scene to be discovered, the examiner to be physically at the scene,
+and — via `CognitionService.Knows` — to actually know about the incident. A late arrival who never
+heard of the crime cannot investigate its evidence until someone tells them (rumor, dialogue).
+The find is logged as `crime.evidence_discovered` (CausedBy → the scene's discovery event) and
+perceived by everyone present. Authenticity is recorded in the event data — the log is ground truth,
+not knowledge — and is never modified.
+
+## ADR-038 — Witnesses are derived, timelines are views
+`GetWitnesses` returns the living characters who know the incident event: no redundant witness
+table to drift out of sync, and no event spam. `GetTimeline` filters the event log by the crime id
+carried in every crime event's data and orders by (timestamp, id); because discovery links
+CausedBy → incident and evidence discovery links CausedBy → discovery, `CausalChain` on the last
+timeline event reproduces the timeline root-first. Both are read-only views for the Phase 8+
+investigation board.
+
+## ADR-039 — Crime has its own persisted RNG stream
+`CrimeState.CrimeRng` is derived from the run seed (`"crime.incident"`) at `NewRun` and persisted,
+so victim/evidence draws never shift the main sim stream (ADR-002) and continue identically after
+save/load — proven by a save→load→continue hash-identity test mid-investigation. The v5→v6
+migration derives the same stream from the old save's run seed.
+
+## Save format v6
+Adds `State.Crime` (crimes, scenes, evidence, counters, crime RNG). Migration v5→v6 initializes
+empty containers plus the derived RNG stream. The validator checks: id/key consistency, victim and
+location references, incident/discovery event references, timestamp ranges, discovery-state
+consistency (discovered ⟺ discoverer + timestamp + discovery event), evidence→scene references,
+non-empty labels/summaries, and defined authenticity values. `ValidateAgainstContent` checks crime
+definition ids against `data/crimes.json`.
+
+## Deferred / known limits
+* The seal (`LocationState.IsSealed`) is currently a marker only: nothing stops characters walking
+  into a sealed scene. Cordon enforcement is Phase 9 (police AI).
+* Characters present at the incident location when it happens do not auto-discover; discovery
+  needs an arrival after the delay (or an explicit `CheckDiscovery` call). "Was present at the
+  incident" logic belongs to Phase 8 investigation.
+* One victim per incident in Phase 7; multi-victim incidents (e.g. larger arsons) are future work.
+* Unsealing / case resolution states are not modeled yet (Phase 9+).

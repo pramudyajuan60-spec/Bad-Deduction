@@ -1,5 +1,6 @@
 using BadDeduction.Characters;
 using BadDeduction.Content;
+using BadDeduction.Crime;
 using BadDeduction.Social;
 using BadDeduction.World;
 
@@ -35,6 +36,7 @@ public static class GameStateValidator
         errors.AddRange(ValidateCast(state));
         errors.AddRange(ValidateCognition(state));
         errors.AddRange(ValidateTravel(state));
+        errors.AddRange(ValidateCrime(state));
 
         // Event log
         var log = state.EventLog;
@@ -137,6 +139,62 @@ public static class GameStateValidator
         return errors;
     }
 
+    private static IEnumerable<string> ValidateCrime(GameState state)
+    {
+        var errors = new List<string>();
+        var cr = state.Crime;
+        if (cr.NextCrimeId < 1) errors.Add("Crime.NextCrimeId is less than 1.");
+        if (cr.NextEvidenceId < 1) errors.Add("Crime.NextEvidenceId is less than 1.");
+        if (cr.CrimeRng.IsZero) errors.Add("Crime.CrimeRng state is all zero.");
+
+        foreach (var (key, c) in cr.Crimes)
+        {
+            if (key != c.Id) errors.Add($"Crime key '{key}' does not match id '{c.Id}'.");
+            if (!state.World.Characters.ContainsKey(c.VictimId)) errors.Add($"Crime '{c.Id}' has unknown victim '{c.VictimId}'.");
+            if (!state.World.Locations.ContainsKey(c.LocationId)) errors.Add($"Crime '{c.Id}' has unknown location '{c.LocationId}'.");
+            if (!state.EventLog.TryGet(c.IncidentEventId, out _)) errors.Add($"Crime '{c.Id}' references unknown incident event {c.IncidentEventId}.");
+            if (c.OccurredAt < 0 || c.OccurredAt > state.TotalMinutes) errors.Add($"Crime '{c.Id}' has an impossible timestamp.");
+            if (!cr.Scenes.TryGetValue(c.SceneId, out var scene)) errors.Add($"Crime '{c.Id}' references unknown scene '{c.SceneId}'.");
+            else if (scene.CrimeId != c.Id) errors.Add($"Scene '{scene.Id}' does not belong to crime '{c.Id}'.");
+        }
+
+        foreach (var (key, s) in cr.Scenes)
+        {
+            if (key != s.Id) errors.Add($"Scene key '{key}' does not match id '{s.Id}'.");
+            if (!cr.Crimes.ContainsKey(s.CrimeId)) errors.Add($"Scene '{s.Id}' references unknown crime '{s.CrimeId}'.");
+            if (!state.World.Locations.ContainsKey(s.LocationId)) errors.Add($"Scene '{s.Id}' has unknown location '{s.LocationId}'.");
+            if (!state.EventLog.TryGet(s.IncidentEventId, out _)) errors.Add($"Scene '{s.Id}' references unknown incident event {s.IncidentEventId}.");
+            if (s.DiscoveredBy is not null && !state.World.Characters.ContainsKey(s.DiscoveredBy))
+                errors.Add($"Scene '{s.Id}' was discovered by unknown character '{s.DiscoveredBy}'.");
+            if ((s.DiscoveredAt is null) != (s.DiscoveredBy is null))
+                errors.Add($"Scene '{s.Id}' has inconsistent discovery state.");
+            if ((s.DiscoveryEventId is null) != (s.DiscoveredBy is null))
+                errors.Add($"Scene '{s.Id}' has inconsistent discovery event.");
+            if (s.DiscoveredAt is { } at && (at < 0 || at > state.TotalMinutes))
+                errors.Add($"Scene '{s.Id}' has an impossible discovery timestamp.");
+            if (s.DiscoveryEventId is { } deid && !state.EventLog.TryGet(deid, out _))
+                errors.Add($"Scene '{s.Id}' references unknown discovery event {deid}.");
+        }
+
+        foreach (var (key, e) in cr.Evidence)
+        {
+            if (key != e.Id) errors.Add($"Evidence key '{key}' does not match id '{e.Id}'.");
+            if (!cr.Scenes.ContainsKey(e.SceneId)) errors.Add($"Evidence '{e.Id}' references unknown scene '{e.SceneId}'.");
+            if (string.IsNullOrWhiteSpace(e.Label)) errors.Add($"Evidence '{e.Id}' has an empty label.");
+            if (string.IsNullOrWhiteSpace(e.Summary)) errors.Add($"Evidence '{e.Id}' has an empty summary.");
+            if (!Enum.IsDefined(e.Authenticity)) errors.Add($"Evidence '{e.Id}' has an invalid authenticity value.");
+            if (e.DiscoveredBy is not null && !state.World.Characters.ContainsKey(e.DiscoveredBy))
+                errors.Add($"Evidence '{e.Id}' was discovered by unknown character '{e.DiscoveredBy}'.");
+            if (e.Discovered != (e.DiscoveredBy is not null))
+                errors.Add($"Evidence '{e.Id}' has inconsistent discovery state.");
+            if ((e.DiscoveredAt is null) != (e.DiscoveredBy is null))
+                errors.Add($"Evidence '{e.Id}' has an inconsistent discovery timestamp.");
+            if (e.DiscoveredAt is { } eat && (eat < 0 || eat > state.TotalMinutes))
+                errors.Add($"Evidence '{e.Id}' has an impossible discovery timestamp.");
+        }
+        return errors;
+    }
+
     private static IEnumerable<string> ValidateCognition(GameState state)
     {
         var errors = new List<string>();
@@ -201,6 +259,9 @@ public static class GameStateValidator
         foreach (var (id, schedule) in state.World.Schedules)
             if (state.World.Characters.TryGetValue(id, out var c))
                 errors.AddRange(ScheduleSystem.Check(id, c.HomeLocationId, schedule, content));
+        foreach (var (id, crime) in state.Crime.Crimes)
+            if (!content.Crimes.Any(d => d.Id == crime.DefinitionId))
+                errors.Add($"Crime '{id}' has unknown definition '{crime.DefinitionId}'.");
         return errors;
     }
 }

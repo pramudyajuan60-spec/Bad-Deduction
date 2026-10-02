@@ -1,4 +1,5 @@
 using BadDeduction.Characters;
+using BadDeduction.Crime;
 using BadDeduction.World;
 
 namespace BadDeduction.Core;
@@ -47,6 +48,9 @@ public sealed class GameState
     /// <summary>Phase 4: what characters know, remember and believe (plain data; see CognitionService).</summary>
     public Cognition.CognitionState Cognition { get; set; } = new();
 
-    // Phases 7+ add: Evidence, CrimeScenes, Police, Hypotheses, Surveillance, Timeline.
+    /// <summary>Phase 7: crimes, scenes and evidence (plain data; see CrimeService).</summary>
+    public CrimeState Crime { get; set; } = new();
+
+    // Phases 8+ add: Police, Hypotheses, Surveillance, Timeline.
     // Each addition bumps SaveSystem.CurrentFormatVersion.
 }

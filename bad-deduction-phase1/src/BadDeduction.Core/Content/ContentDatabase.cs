@@ -1,11 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using BadDeduction.Characters;
 
 namespace BadDeduction.Content;
 
 /// <summary>
 /// Read-only game content shared by every run. Locations (Phase 1) plus occupations, goals, secrets and
-/// names (Phase 2). Evidence and crime definitions are added by later phases as JSON files.
+/// names (Phase 2) plus crime definitions (Phase 7). Evidence and crime definitions are added by later phases as JSON files.
 /// </summary>
 public sealed class ContentDatabase
 {
@@ -29,6 +30,7 @@ public sealed class ContentDatabase
     public IReadOnlyList<OccupationDefinition> Occupations { get; }
     public IReadOnlyList<GoalDefinition> Goals { get; }
     public IReadOnlyList<SecretDefinition> Secrets { get; }
+    public IReadOnlyList<CrimeDefinition> Crimes { get; }
     public NameTable Names { get; }
 
     public ContentDatabase(
@@ -36,11 +38,13 @@ public sealed class ContentDatabase
         IEnumerable<OccupationDefinition>? occupations = null,
         IEnumerable<GoalDefinition>? goals = null,
         IEnumerable<SecretDefinition>? secrets = null,
-        NameTable? names = null)
+        NameTable? names = null,
+        IEnumerable<CrimeDefinition>? crimes = null)
     {
         Occupations = (occupations ?? Array.Empty<OccupationDefinition>()).ToList();
         Goals = (goals ?? Array.Empty<GoalDefinition>()).ToList();
         Secrets = (secrets ?? Array.Empty<SecretDefinition>()).ToList();
+        Crimes = (crimes ?? Array.Empty<CrimeDefinition>()).ToList();
         Names = names ?? new NameTable();
 
         var ordered = new List<LocationDefinition>();
@@ -111,6 +115,9 @@ public sealed class ContentDatabase
     public OccupationDefinition GetOccupation(string id) =>
         Occupations.FirstOrDefault(o => o.Id == id) ?? throw new KeyNotFoundException($"Unknown occupation '{id}'.");
 
+    public CrimeDefinition GetCrime(string id) =>
+        Crimes.FirstOrDefault(c => c.Id == id) ?? throw new KeyNotFoundException($"Unknown crime '{id}'.");
+
     public IReadOnlyDictionary<string, int> Neighbors(string id) =>
         _adjacency.TryGetValue(id, out var n) ? n : throw new KeyNotFoundException($"Unknown location '{id}'.");
 
@@ -130,6 +137,7 @@ public sealed class ContentDatabase
                 if (!seen.Contains(def.Id)) errors.Add($"Location '{def.Id}' is unreachable from '{Locations[0].Id}'.");
         }
         errors.AddRange(ValidateCastContent());
+        errors.AddRange(ValidateCrimes());
         return errors;
     }
 
@@ -171,6 +179,36 @@ public sealed class ContentDatabase
         return errors;
     }
 
+    private IEnumerable<string> ValidateCrimes()
+    {
+        var errors = new List<string>();
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        var allTags = new HashSet<string>(Locations.SelectMany(l => l.Tags), StringComparer.Ordinal);
+        foreach (var c in Crimes)
+        {
+            if (string.IsNullOrWhiteSpace(c.Id) || !ids.Add(c.Id)) errors.Add($"Crime id '{c.Id}' is empty or duplicated.");
+            if (string.IsNullOrWhiteSpace(c.Label)) errors.Add($"Crime '{c.Id}' has an empty label.");
+            foreach (var k in c.VictimKinds)
+                if (!Enum.TryParse<CharacterKind>(k, out _)) errors.Add($"Crime '{c.Id}' has unknown victim kind '{k}'.");
+            if (c.MinDiscoveryDelayMinutes < 0) errors.Add($"Crime '{c.Id}' has a negative discovery delay.");
+            foreach (var t in c.LocationTags)
+                if (!allTags.Contains(t)) errors.Add($"Crime '{c.Id}' references unknown location tag '{t}'.");
+            var templateIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var t in c.EvidenceTemplates)
+            {
+                if (string.IsNullOrWhiteSpace(t.Id) || !templateIds.Add(t.Id))
+                    errors.Add($"Crime '{c.Id}' has an evidence template with empty or duplicate id '{t.Id}'.");
+                if (string.IsNullOrWhiteSpace(t.Label)) errors.Add($"Evidence template '{t.Id}' has an empty label.");
+                if (string.IsNullOrWhiteSpace(t.Summary)) errors.Add($"Evidence template '{t.Id}' has an empty summary.");
+                if (t.AuthenticWeight < 0 || t.FalseWeight < 0 || t.MisleadingWeight < 0)
+                    errors.Add($"Evidence template '{t.Id}' has negative authenticity weights.");
+                if (t.AuthenticWeight + t.FalseWeight + t.MisleadingWeight == 0)
+                    errors.Add($"Evidence template '{t.Id}' has all-zero authenticity weights.");
+            }
+        }
+        return errors;
+    }
+
     public void ThrowIfInvalid()
     {
         var errors = Validate();
@@ -196,7 +234,8 @@ public sealed class ContentDatabase
             Read<OccupationsFile>("occupations.json").Occupations,
             Read<GoalsFile>("goals.json").Goals,
             Read<SecretsFile>("character_secrets.json").Secrets,
-            Read<NameTable>("names.json"));
+            Read<NameTable>("names.json"),
+            Read<CrimesFile>("crimes.json").Crimes);
         db.ThrowIfInvalid();
         return db;
     }

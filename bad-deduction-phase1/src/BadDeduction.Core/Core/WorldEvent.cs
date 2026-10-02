@@ -49,4 +49,7 @@ public static class WorldEventTypes
     public const string RumorSpread = "cognition.rumor_spread";
     public const string BeliefChanged = "cognition.belief_changed";
     public const string DialogueExchanged = "dialogue.exchanged";
+    public const string CrimeIncident = "crime.incident";
+    public const string CrimeDiscovered = "crime.discovered";
+    public const string EvidenceDiscovered = "crime.evidence_discovered";
 }

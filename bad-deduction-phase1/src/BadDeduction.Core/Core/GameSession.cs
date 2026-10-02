@@ -2,6 +2,7 @@ using BadDeduction.AI;
 using BadDeduction.Characters;
 using BadDeduction.Cognition;
 using BadDeduction.Content;
+using BadDeduction.Crime;
 using BadDeduction.Social;
 using BadDeduction.World;
 
@@ -25,6 +26,9 @@ public sealed class GameSession
     public ComplianceEvaluator Compliance { get; }
     public CognitionService Cognition { get; }
     public CastGenerator Cast { get; }
+
+    /// <summary>Phase 7: incidents, scenes, evidence and discovery.</summary>
+    public CrimeService Crime { get; }
 
     /// <summary>
     /// Phase 5: the world tick. Advance time through here (not <see cref="Time"/>) when the
@@ -59,6 +63,7 @@ public sealed class GameSession
         Compliance = new ComplianceEvaluator(state, Social);
         Cognition = new CognitionService(state, Events, Relationships);
         Cast = new CastGenerator(state, content, World, Relationships);
+        Crime = new CrimeService(state, Events, Cognition, content);
         Simulate = new WorldSimulation(state, Time, Events, World, Cognition, content);
         View = new PlayerView(state);
         Debug = new DebugAccess(state);
@@ -114,6 +119,9 @@ public sealed class GameSession
         // Cognition gets its own persisted RNG stream so rumor/distortion draws never shift the
         // main simulation stream (ADR-002) and continue identically after save/load.
         state.Cognition.CognitionRng = DeterministicRandom.Derive(runSeed, "cognition.memory").Snapshot();
+        // Crime gets its own persisted RNG stream for the same reason: incident generation must
+        // never shift another system's draws (ADR-002).
+        state.Crime.CrimeRng = DeterministicRandom.Derive(runSeed, "crime.incident").Snapshot();
         foreach (var def in content.Locations)
             state.World.Locations[def.Id] = new LocationState { Id = def.Id };
 
