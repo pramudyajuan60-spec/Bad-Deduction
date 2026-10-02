@@ -1,0 +1,177 @@
+# REFERENCE-BASED ASSET GENERATION
+
+The existing PNG assets in the repository are primarily **visual references**, not necessarily the final production assets.
+
+When an existing PNG is provided as a design reference, do not assume that the PNG itself must be used directly as the final in-game texture.
+
+The intended workflow is:
+
+```text
+EXISTING REFERENCE ASSET
+        ↓
+VISUAL ANALYSIS
+        ↓
+ASSET SPECIFICATION
+        ↓
+GENERATED TEXTURE / ART ASSET
+        ↓
+GODOT INTEGRATION
+```
+
+The reference image should be used to preserve the intended visual identity.
+
+Analyze and preserve, where applicable:
+
+* character identity;
+* face structure;
+* hairstyle;
+* body proportions;
+* silhouette;
+* clothing;
+* armor;
+* accessories;
+* weapons;
+* color relationships;
+* material appearance;
+* lighting direction;
+* visual style;
+* perspective;
+* proportions;
+* environmental design;
+* architectural style;
+* UI visual language.
+
+The goal is NOT to simply display the original PNG inside the game.
+
+The goal is to create a **production-quality game asset inspired directly by the approved reference**.
+
+---
+
+## CHARACTER REFERENCES
+
+For character assets, preserve the established character design.
+
+Do not arbitrarily redesign:
+
+* face;
+* hairstyle;
+* clothing;
+* body proportions;
+* age appearance;
+* gender presentation;
+* equipment;
+* silhouette;
+* color identity.
+
+The generated asset may improve:
+
+* texture detail;
+* material definition;
+* shading;
+* surface detail;
+* fabric detail;
+* leather/metal detail;
+* lighting;
+* pixel-art rendering quality;
+* visual consistency.
+
+However, improvements must not change the character's recognizable identity.
+
+---
+
+## TEXTURE GENERATION
+
+When texture generation is required, create textures based on the approved reference.
+
+The texture should correspond to the actual geometry/material it will be applied to.
+
+Do not generate a visually unrelated texture merely because it looks aesthetically appealing.
+
+The texture must support:
+
+* correct material identity;
+* correct scale;
+* correct UV usage;
+* correct visual style;
+* correct character/environment identity.
+
+---
+
+## REFERENCE VS FINAL ASSET
+
+Treat the repository assets using the following distinction:
+
+```text
+REFERENCE ASSET
+=
+Design authority
+
+FINAL ASSET
+=
+Production-ready implementation
+```
+
+A reference asset can therefore remain unchanged in the repository while a separate generated/processed asset is created for the game.
+
+Recommended structure:
+
+```text
+assets/
+├── references/
+│   ├── characters/
+│   ├── environments/
+│   ├── ui/
+│   └── maps/
+│
+├── generated/
+│   ├── textures/
+│   ├── characters/
+│   └── environments/
+│
+└── game/
+    ├── materials/
+    ├── sprites/
+    └── models/
+```
+
+Never overwrite the original reference assets unless explicitly instructed.
+
+---
+
+## VISUAL CONSISTENCY
+
+All generated assets must belong to the same visual universe.
+
+Do not allow individual generated assets to drift into:
+
+* different art styles;
+* different proportions;
+* different color language;
+* different rendering styles;
+* different levels of realism;
+* inconsistent lighting.
+
+The reference assets establish the visual identity of Bad Deduction.
+
+Generated assets must expand that identity rather than replace it.
+
+---
+
+## IMPORTANT
+
+If the current development environment does not provide an image-generation capability, do NOT pretend that a new texture has been generated.
+
+Instead:
+
+1. analyze the reference;
+2. create a precise asset-generation specification;
+3. identify the required generated asset;
+4. create the appropriate Godot import/material structure;
+5. clearly state that image generation requires an image-generation tool;
+6. continue with everything that can be implemented without the generated image.
+
+Never create fake placeholder claims such as:
+
+> "Texture generated successfully"
+
+when no actual texture-generation capability was available.
