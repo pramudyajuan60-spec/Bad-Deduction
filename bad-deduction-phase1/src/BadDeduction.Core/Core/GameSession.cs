@@ -1,4 +1,5 @@
 using BadDeduction.AI;
+using BadDeduction.Agenda;
 using BadDeduction.Characters;
 using BadDeduction.Cognition;
 using BadDeduction.Content;
@@ -44,6 +45,13 @@ public sealed class GameSession
     public PoliceService Police { get; }
 
     /// <summary>
+    /// Phase 10: the hidden-genius layer (Malvr / Lumiel) — seeded identities, hidden
+    /// objectives and the daily strategic tick for NPC-held geniuses. Also feeds the
+    /// interview deception seam (<see cref="Investigation.InvestigationService.Deception"/>).
+    /// </summary>
+    public HiddenAgendaService Agenda { get; }
+
+    /// <summary>
     /// Phase 5: the world tick. Advance time through here (not <see cref="Time"/>) when the
     /// world should live: <c>Simulate.Advance(n)</c> wraps <see cref="TimeSystem.Advance"/>
     /// minute by minute. <see cref="Time"/> stays sim-free for raw time jumps.
@@ -80,6 +88,8 @@ public sealed class GameSession
         Investigate = new InvestigationService(state, Events, Cognition, Crime, Social, content);
         Police = new PoliceService(state, Events, Social, Investigate, Crime, Cognition, content);
         World.AccessCheck = Police.CanEnter;
+        Agenda = new HiddenAgendaService(state, Events, Cognition, Crime, Investigate, Social, content);
+        Investigate.Deception = Agenda;
         Simulate = new WorldSimulation(state, Time, Events, World, Cognition, content);
         Simulate.CanEnter = Police.CanEnter;
         Simulate.DutyLocationFor = Police.DutyLocationFor;
@@ -140,6 +150,9 @@ public sealed class GameSession
         // Crime gets its own persisted RNG stream for the same reason: incident generation must
         // never shift another system's draws (ADR-002).
         state.Crime.CrimeRng = DeterministicRandom.Derive(runSeed, "crime.incident").Snapshot();
+        // The hidden-agenda layer gets its own stream too: role assignment, objective picks
+        // and strategic draws (ADR-002).
+        state.Agenda.AgendaRng = DeterministicRandom.Derive(runSeed, "agenda.roles").Snapshot();
         foreach (var def in content.Locations)
             state.World.Locations[def.Id] = new LocationState { Id = def.Id };
 

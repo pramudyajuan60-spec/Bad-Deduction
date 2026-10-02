@@ -14,7 +14,26 @@ internal static class TestSupport
         ulong seed = 42,
         Campaign campaign = Campaign.Lumiel,
         ContentDatabase? content = null,
-        Difficulty difficulty = Difficulty.Medium)
+        Difficulty difficulty = Difficulty.Medium) =>
+        BuildPopulatedWorld(seed, campaign, content, difficulty, seededRoles: false);
+
+    /// <summary>
+    /// Same small world, but roles assigned through the seeded canonical path
+    /// (Phase 10: <c>HiddenIdentitySystem.AssignHiddenRoles</c>) instead of manual assignment.
+    /// </summary>
+    public static GameSession NewAgendaSession(
+        ulong seed = 42,
+        Campaign campaign = Campaign.Lumiel,
+        ContentDatabase? content = null,
+        Difficulty difficulty = Difficulty.Medium) =>
+        BuildPopulatedWorld(seed, campaign, content, difficulty, seededRoles: true);
+
+    private static GameSession BuildPopulatedWorld(
+        ulong seed,
+        Campaign campaign,
+        ContentDatabase? content,
+        Difficulty difficulty,
+        bool seededRoles)
     {
         var s = GameSession.NewRun(seed, campaign, difficulty, content ?? LoadContent());
 
@@ -32,8 +51,13 @@ internal static class TestSupport
         Add("c_guard", "A Guard", 29, "guard", CharacterKind.Police, "loc_residential", "loc_guard_station");
 
         s.World.SetPlayerCharacter("c_player");
-        s.Identity.AssignRole("c_player", campaign == Campaign.Lumiel ? HiddenRole.Lumiel : HiddenRole.Malvr);
-        s.Identity.AssignRole("c_rival", campaign == Campaign.Lumiel ? HiddenRole.Malvr : HiddenRole.Lumiel);
+        if (seededRoles)
+            s.Identity.AssignHiddenRoles();
+        else
+        {
+            s.Identity.AssignRole("c_player", campaign == Campaign.Lumiel ? HiddenRole.Lumiel : HiddenRole.Malvr);
+            s.Identity.AssignRole("c_rival", campaign == Campaign.Lumiel ? HiddenRole.Malvr : HiddenRole.Lumiel);
+        }
         return s;
     }
 

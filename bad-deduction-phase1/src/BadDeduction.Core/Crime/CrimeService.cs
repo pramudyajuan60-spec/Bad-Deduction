@@ -109,11 +109,13 @@ public sealed class CrimeService
     /// (living, never the player), kills them if the definition is fatal, seals their location,
     /// creates the scene, and spawns one Evidence item per template with authenticity drawn from
     /// the template's weights. Time of the incident is now. Returns the crime record.
+    /// An explicit <paramref name="victimId"/> (Phase 10: orchestrated hits) must name a living
+    /// non-player character; it skips the seeded draw but keeps every other rule.
     /// </summary>
-    public CrimeRecord GenerateIncident(string definitionId)
+    public CrimeRecord GenerateIncident(string definitionId, string? victimId = null)
     {
         var def = _content.GetCrime(definitionId);
-        var victim = PickVictim(def);
+        var victim = victimId is null ? PickVictim(def) : RequireVictim(victimId);
         var locationId = victim.CurrentLocationId;
 
         // The dead leave no trips behind.
@@ -175,6 +177,17 @@ public sealed class CrimeService
         scene.IncidentEventId = incident.Id;
 
         return crime;
+    }
+
+    private CharacterState RequireVictim(string victimId)
+    {
+        if (!_state.World.Characters.TryGetValue(victimId, out var c))
+            throw new ArgumentException($"Unknown victim '{victimId}'.", nameof(victimId));
+        if (!c.IsAlive)
+            throw new InvalidOperationException($"Victim '{victimId}' is already dead.");
+        if (victimId == _state.Player.CharacterId)
+            throw new InvalidOperationException("The player character can never be a victim.");
+        return c;
     }
 
     /// <summary>

@@ -26,7 +26,7 @@ public sealed class SaveEnvelope
 public static class SaveSystem
 {
     public const string GameId = "BadDeduction";
-    public const int CurrentFormatVersion = 8;
+    public const int CurrentFormatVersion = 9;
 
     /// <summary>Migrations keyed by the version they upgrade FROM (operate on the raw JSON tree).</summary>
     private static readonly Dictionary<int, Action<JsonNode>> Migrations = new()
@@ -105,6 +105,21 @@ public static class SaveSystem
             if (root["State"] is not JsonObject state) return;
             if (state["Police"] is not null) return;
             state["Police"] = JsonSerializer.SerializeToNode(new Police.PoliceState(), Compact);
+        },
+        // v8 -> v9 (Phase 10): runs gain the hidden-agenda state (objectives, action days,
+        // incident attributions). Old saves get empty containers plus a valid agenda RNG
+        // stream derived from their run seed, so post-migration draws are deterministic
+        // and never touch the sim stream.
+        [8] = root =>
+        {
+            if (root["State"] is not JsonObject state) return;
+            if (state["Agenda"] is not null) return;
+            var seed = state["Meta"]?["RunSeed"]?.GetValue<ulong>() ?? 0;
+            var agenda = new Agenda.HiddenAgendaState
+            {
+                AgendaRng = DeterministicRandom.Derive(seed, "agenda.roles").Snapshot(),
+            };
+            state["Agenda"] = JsonSerializer.SerializeToNode(agenda, Compact);
         },
     };
 

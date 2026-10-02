@@ -63,4 +63,7 @@ public static class WorldEventTypes
     public const string PoliceDutyAssigned = "police.duty_assigned";
     public const string PoliceAlertChanged = "police.alert_changed";
     public const string PoliceArrest = "police.arrest";
+    public const string AgendaObjectiveCompleted = "agenda.objective_completed";
+    public const string AgendaObjectiveFailed = "agenda.objective_failed";
+    public const string AgendaWarning = "agenda.warning";
 }

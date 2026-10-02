@@ -47,6 +47,13 @@ public sealed class InvestigationService
     private readonly SocialService _social;
     private readonly ContentDatabase _content;
 
+    /// <summary>
+    /// Phase 10 seam: when set (the agenda service), a secretly genius speaker may replace
+    /// their truthful whereabouts claim with a prepared lie. Null by default: answers stay
+    /// exactly as truthful as before.
+    /// </summary>
+    public IDeceptionHook? Deception { get; set; }
+
     public InvestigationService(
         GameState state,
         EventSystem events,
@@ -216,8 +223,8 @@ public sealed class InvestigationService
     /// <summary>
     /// Builds the speaker's answer — and the structured claim recorded for it — purely from
     /// the speaker's own knowledge. Unknown events get the canonical "don't know"; whereabouts
-    /// are reconstructed from the speaker's own movement record (truthful for now; deliberate
-    /// lies arrive with hidden objectives in Phase 10).
+    /// are reconstructed from the speaker's own movement record (truthful unless the Phase 10
+    /// deception hook substitutes a prepared lie, which is then recorded like any statement).
     /// </summary>
     private (string Answer, string Claim) AnswerTopic(CharacterState speaker, string topic)
     {
@@ -246,15 +253,31 @@ public sealed class InvestigationService
         }
         var minute = long.Parse(topic.Substring(InvestigationRules.WhereaboutsTopicPrefix.Length));
         var (location, travelFrom, travelTo) = PresenceTracker.PresenceAt(_state, speaker.Id, minute);
+        (string Answer, string Claim) truthful;
         if (location is not null)
         {
             var name = _content.GetLocation(location).Name;
-            return ($"I was at {name}.", InvestigationRules.FormatWhereabouts(location, minute));
+            truthful = ($"I was at {name}.", InvestigationRules.FormatWhereabouts(location, minute));
         }
-        var fromName = _content.GetLocation(travelFrom!).Name;
-        var toName = _content.GetLocation(travelTo!).Name;
-        return ($"I was traveling from {fromName} to {toName}.",
-            InvestigationRules.FormatTraveling(travelFrom!, travelTo!, minute));
+        else
+        {
+            var fromName = _content.GetLocation(travelFrom!).Name;
+            var toName = _content.GetLocation(travelTo!).Name;
+            truthful = ($"I was traveling from {fromName} to {toName}.",
+                InvestigationRules.FormatTraveling(travelFrom!, travelTo!, minute));
+        }
+        // Phase 10: a secretly genius speaker may substitute a prepared lie. A rejected or
+        // unparsable substitution falls back to the truthful answer.
+        if (Deception?.MaybeDeceive(speaker.Id, topic, truthful.Claim) is { } lie
+            && lie != truthful.Claim
+            && InvestigationRules.TryParseWhereabouts(lie, out var parsed)
+            && parsed?.LocationId is not null
+            && _content.HasLocation(parsed.LocationId))
+        {
+            var name = _content.GetLocation(parsed.LocationId).Name;
+            return ($"I was at {name}.", lie);
+        }
+        return truthful;
     }
 
     // ------------------------------------------------------------------ statements

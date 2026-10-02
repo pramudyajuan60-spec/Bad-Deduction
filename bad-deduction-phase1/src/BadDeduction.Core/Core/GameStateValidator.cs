@@ -41,6 +41,7 @@ public static class GameStateValidator
         errors.AddRange(ValidateCrime(state));
         errors.AddRange(ValidateInvestigation(state));
         errors.AddRange(ValidatePolice(state));
+        errors.AddRange(ValidateAgenda(state));
 
         // Event log
         var log = state.EventLog;
@@ -292,6 +293,49 @@ public static class GameStateValidator
                 errors.Add($"Police case '{crimeId}' references unknown subject '{cs.SubjectId}'.");
             if (cs.State == CaseState.Open && cs.SubjectId is not null)
                 errors.Add($"Police case '{crimeId}' is Open but names a subject.");
+        }
+        return errors;
+    }
+
+    private static IEnumerable<string> ValidateAgenda(GameState state)
+    {
+        var errors = new List<string>();
+        var agenda = state.Agenda;
+        if (agenda.AgendaRng.IsZero) errors.Add("Agenda.AgendaRng state is all zero.");
+        if (agenda.NextObjectiveId < 1) errors.Add("Agenda.NextObjectiveId is less than 1.");
+
+        foreach (var (key, o) in agenda.Objectives)
+        {
+            if (key != o.Id) errors.Add($"Objective key '{key}' does not match id '{o.Id}'.");
+            if (!state.World.Characters.ContainsKey(o.HolderId))
+                errors.Add($"Objective '{o.Id}' has unknown holder '{o.HolderId}'.");
+            else if (!state.Truth.HiddenRoles.ContainsKey(o.HolderId))
+                errors.Add($"Objective '{o.Id}' is held by '{o.HolderId}', who holds no hidden role.");
+            if (!Enum.IsDefined(o.Kind)) errors.Add($"Objective '{o.Id}' has an invalid kind.");
+            if (!Enum.IsDefined(o.Status)) errors.Add($"Objective '{o.Id}' has an invalid status.");
+            if (o.TargetId is not null && !state.World.Characters.ContainsKey(o.TargetId))
+                errors.Add($"Objective '{o.Id}' references unknown target '{o.TargetId}'.");
+            if (o.TargetId2 is not null && !state.World.Characters.ContainsKey(o.TargetId2))
+                errors.Add($"Objective '{o.Id}' references unknown second target '{o.TargetId2}'.");
+            if (o.CrimeId is not null && !state.Crime.Crimes.ContainsKey(o.CrimeId))
+                errors.Add($"Objective '{o.Id}' references unknown crime '{o.CrimeId}'.");
+            if (o.CreatedAt < 0 || o.CreatedAt > state.TotalMinutes)
+                errors.Add($"Objective '{o.Id}' has an impossible creation time.");
+        }
+
+        foreach (var (holderId, day) in agenda.LastActionDay)
+        {
+            if (!state.World.Characters.ContainsKey(holderId))
+                errors.Add($"Agenda.LastActionDay references unknown character '{holderId}'.");
+            if (day < 1) errors.Add($"Agenda.LastActionDay for '{holderId}' has an invalid day.");
+        }
+
+        foreach (var (crimeId, holderId) in agenda.IncidentAttribution)
+        {
+            if (!state.Crime.Crimes.ContainsKey(crimeId))
+                errors.Add($"Agenda.IncidentAttribution references unknown crime '{crimeId}'.");
+            if (!state.World.Characters.ContainsKey(holderId))
+                errors.Add($"Agenda.IncidentAttribution for '{crimeId}' references unknown character '{holderId}'.");
         }
         return errors;
     }

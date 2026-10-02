@@ -11,7 +11,7 @@ that emerge from the simulation instead of a scripted solution.
 
 ## Status
 
-**Phases 1-9 complete.**
+**Phases 1-10 complete.**
 * Phase 1 (Foundation): deterministic RNG, game time, event bus + causal world-event log, versioned
   save/load with state hashing, location content, truth-vs-player-view separation.
 * Phase 2 (Characters): seeded cast generation (`session.Cast.Generate(new CastSpec())` → 17 civilians
@@ -62,13 +62,22 @@ that emerge from the simulation instead of a scripted solution.
   (Guard/Patrol/Investigate) that steer officers' work blocks in the sim, and bounded
   arrests (Suspect stance + Believes-band theory + 2 supporting evidence). Save format v8.
 
-273 tests. No presentation layer yet (Phase 11).
+* Phase 10 (Malvr/Lumiel): `session.Agenda` — seeded hidden-identity assignment (the player's
+  side is their campaign; the opposing genius is drawn uniformly from eligible NPCs via the
+  `agenda.roles` RNG stream), hidden objectives (Malvr: EliminateObstacle/SowDistrust/EvadeSuspicion;
+  Lumiel: ProtectTarget/GatherAlly/PursueLead) with leak-free lifecycle events, a daily strategic
+  tick driving the NPC-held genius (one deterministic action per day from their own knowledge
+  only — never WorldTruth), and interview deception (genius holders may lie about whereabouts
+  near known crimes; the lie is recorded normally so Genius contradiction detection can catch it).
+  Save format v9.
+
+304 tests. No presentation layer yet (Phase 11).
 
 ## Layout
 
 ```
 src/BadDeduction.Core/     engine-free simulation library (net8.0)
-  Core/  World/  Characters/  Social/  Cognition/  Content/  AI/  Crime/  Investigation/  Police/
+  Core/  World/  Characters/  Social/  Cognition/  Content/  AI/  Crime/  Investigation/  Police/  Agenda/
 tests/BadDeduction.Tests/  dependency-free test runner
 data/                      data-driven content (locations, occupations, goals, character secrets, names, crimes)
 docs/                      audit, roadmap, decisions

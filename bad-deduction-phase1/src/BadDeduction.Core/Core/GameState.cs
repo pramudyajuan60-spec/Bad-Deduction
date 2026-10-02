@@ -1,3 +1,4 @@
+using BadDeduction.Agenda;
 using BadDeduction.Characters;
 using BadDeduction.Crime;
 using BadDeduction.Investigation;
@@ -59,6 +60,12 @@ public sealed class GameState
     /// <summary>Phase 9: alert level, duty roster, case states, per-officer RNG (plain data; see PoliceService).</summary>
     public PoliceState Police { get; set; } = new();
 
-    // Phases 10+ add: hidden-identity campaigns, presentation.
+    /// <summary>
+    /// Phase 10: hidden-genius objectives and incident attributions (plain data; see
+    /// HiddenAgendaService). Truth-side like WorldTruth: never exposed to gameplay UI.
+    /// </summary>
+    public HiddenAgendaState Agenda { get; set; } = new();
+
+    // Phase 11+ adds: presentation.
     // Each addition bumps SaveSystem.CurrentFormatVersion.
 }

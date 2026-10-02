@@ -638,11 +638,72 @@ the hypothesis and confidence, and the simulation skips detained characters. A w
 possible — the theory may rest on false evidence — and is simply part of the log; trial,
 sentencing and win/lose stay out of scope (audit §D).
 
-## Save format v8
-Adds `State.Police` (alert, officer RNG streams, duty roster, case states). Migration v7→v8
-installs a fresh Calm state; officer streams derive lazily from the run seed. The validator
-checks: defined alert/case/duty values, duty↔officer/location/scene references, roster-day
-consistency, case↔crime/subject references, non-zero RNG streams, and hypothesis owner references.
+# Phase 10 — Malvr/Lumiel: hidden identities, objectives, strategic AI, deception
+
+## ADR-052 — Seeded role assignment: player knows their side, the rival is drawn
+The player's genius side IS their campaign (`GameMeta.Campaign` — no new API; the player
+always knows their own side per the audit). The opposing genius is drawn deterministically
+from the `(runSeed, "agenda.roles")` RNG stream, uniformly among eligible NPCs. Eligible =
+living, non-player characters (police included — a hidden genius with a badge is legitimate;
+documented as a design choice). The uniform-share exit criterion (no NPC gets Malvr more than
+2× uniform share over 240 seeds) is enforced by test, not by weighting. Manual `AssignRole`
+remains for tests; `AssignHiddenRoles()` is the canonical seeded path.
+
+## ADR-053 — Objectives are truth-side; lifecycle events never name roles
+`HiddenObjective` {Id, HolderId, Kind, TargetId?, TargetId2?, CrimeId?, Status, CreatedAt} lives
+in `HiddenAgendaState` (truth-side like `WorldTruth`, only visible via `DebugAccess`). Status
+transitions log `agenda.objective_completed` / `agenda.objective_failed` with objective id and
+kind ONLY — never the holder's role. Incident attribution (which genius orchestrated which crime)
+is stored ONLY in `HiddenAgendaState.IncidentAttribution`, never in event data; the crime itself
+is public, the link to the orchestrator is hidden. The holder is never in the incident's
+participants.
+
+## ADR-054 — The strategic tick drives the NPC-held genius, one action per day
+`HiddenAgendaService.StrategicTick()` runs on `DayChanged` (and manually). It drives ONLY
+NPC-held geniuses — the player's own genius side is player-driven (documented). Each holder
+takes at most ONE action per day (`LastActionDay` gate). Action priority: Malvr —
+DeflectAttention (if heat) → EliminateObstacle → SowDistrust → SpreadRumor; Lumiel —
+ProtectTarget → PursueLead → GatherAlly. All actions use only the holder's own knowledge
+(`CognitionService`) plus public roster/contact info.
+
+## ADR-055 — Knowledge discipline: the genius AI never reads WorldTruth
+The director may read the role roster (to know WHO the holders are), but each genius's DECISIONS
+use only: their own role (identity), their own knowledge via `CognitionService` (the ONLY knowledge
+source), and public information (roster, contacts, locations). The AI never reads other characters'
+hidden roles, secrets, or WorldTruth. `TellRumor` enforces the knowledge gate (throws if the speaker
+doesn't know the event). Tested by asserting every rumor/action references only known entities/events.
+
+## ADR-056 — Deception is a seam in the interview path, not a special case
+`HiddenAgendaService.MaybeDeceive(characterId, topic, truthfulClaim)` returns an alternate claim
+or null. It fires only when: the speaker secretly holds a genius role (never the player), the topic
+is whereabouts, and the topic minute is within 180 minutes of a crime the speaker knows. The
+decision is deterministic via `StableHash(seed, "deceive", speaker, topic)`. The false claim is
+recorded NORMALLY via the standard statement path — so Genius-difficulty contradiction detection
+(`CheckAgainstSurveillance`) can catch it. That's the intended gameplay loop: the lie is a fair
+clue, not a cheat.
+
+## ADR-057 — Both campaigns tick the NPC-held genius
+With campaign=Malvr, the player IS Malvr (knows it via `GameMeta`), and the NPC Lumiel runs the
+Lumiel AI. With campaign=Lumiel, vice versa. `StrategicTick` drives whichever genius is NPC-held.
+No special-casing by campaign in the action logic — the role determines the behavior.
+
+## Save format v9
+Adds `State.Agenda` (objectives, incident attribution, per-holder last-action days, agenda RNG
+stream). Migration v8→v9 installs an empty agenda state; the RNG stream derives from
+`(runSeed, "agenda.roles")`. The validator checks: objective holder/target references, valid
+kind/status values, attribution crime references, and non-zero RNG stream.
+
+## Deferred / known limits (updated)
+* Officers do not yet act autonomously on their case files (no self-directed interviews or
+  evidence hunts); `OpenCase`/`AssessEvidence` are explicit calls for the Phase 11+ game loop
+  or AI director to drive.
+* No police hierarchy yet (captain vs guards); duty assignment is flat round-robin.
+* Unsealing scenes and full case resolution (trial/win/lose) are future work.
+* The interrogation-pressure effect of higher alert levels is currently expressed through
+  doubled evaluation nudges; direct pressure mechanics belong to a future pass.
+* Phase 10: genius objectives are fixed at seeding (2 per holder); dynamic objective generation
+  mid-run (e.g. new obstacles emerging) is future work. The player's own genius actions are
+  player-driven (no AI assistance); a "suggest move" helper is future work.
 
 ## Deferred / known limits
 * Officers do not yet act autonomously on their case files (no self-directed interviews or
