@@ -11,7 +11,7 @@ that emerge from the simulation instead of a scripted solution.
 
 ## Status
 
-**Phases 1-5 complete.**
+**Phases 1-6 complete.**
 * Phase 1 (Foundation): deterministic RNG, game time, event bus + causal world-event log, versioned
   save/load with state hashing, location content, truth-vs-player-view separation.
 * Phase 2 (Characters): seeded cast generation (`session.Cast.Generate(new CastSpec())` → 17 civilians
@@ -33,13 +33,19 @@ that emerge from the simulation instead of a scripted solution.
   in-progress trips, `character.departed`/`character.moved`/`character.activity_changed` events, and
   arrival/departure witnessing through the Phase 4 knowledge gate. Save format v5.
 
-161 tests. No presentation layer yet (Phase 11).
+* Phase 6 (AI dialogue): `session.Dialogue` — Orchestrator → ContextEngine → IAIProvider → Validator
+  pipeline. Prompts are built from one NPC's knowledge only (never truth); a deterministic
+  `MockAIProvider` is the CI baseline; every exchange (accepted or fallback) is stored as a
+  `dialogue.exchanged` world event, so the sim never re-calls the provider on load. No save-format
+  change (conversations are transient).
+
+186 tests. No presentation layer yet (Phase 11).
 
 ## Layout
 
 ```
 src/BadDeduction.Core/     engine-free simulation library (net8.0)
-  Core/  World/  Characters/  Social/  Cognition/  Content/
+  Core/  World/  Characters/  Social/  Cognition/  Content/  AI/
 tests/BadDeduction.Tests/  dependency-free test runner
 data/                      data-driven content (locations, occupations, goals, character secrets, names)
 docs/                      audit, roadmap, decisions

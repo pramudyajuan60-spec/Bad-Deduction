@@ -301,3 +301,91 @@ non-negative times, arrival after departure, a recorded departure event, and the
 * Interruptions (being stopped, detained, lured away) are Phase 6+; the sim currently always
   follows the schedule, recovering by heading for the current block when displaced.
 * No memory consolidation/pruning caps yet (carried over from Phase 4).
+
+---
+
+# Phase 6 — AI dialogue
+
+```
+DialogueOrchestrator (session.Dialogue)
+  Exchange ── context → provider → validator → apply via Social/Cognition/EventSystem
+  ContextEngine ── prompt from ONE NPC's knowledge only (no GameState/WorldTruth/DebugAccess refs)
+  IAIProvider ── synchronous; AIResponse is Accept(output) or Refuse(reason)
+  DialogueValidator ── malformed / role-revealing / unknown-entity checks; deltas clamped ±20
+  MockAIProvider ── FNV-1a(seed, request) templates; the CI baseline
+  DifficultySystem ── memory/belief context caps + contradiction-sensitivity hook (Phase 8)
+dialogue.exchanged ── every exchange stored as a world event; the sim never re-calls the provider
+```
+
+## ADR-027 — The provider interface is synchronous
+`IAIProvider.Complete` is a plain synchronous call returning `AIResponse` (accept or refuse).
+No real network exists in this codebase, and async would add nothing but ceremony; when a real
+provider arrives it can block its own thread or run on a worker — the pipeline shape does not
+change. Refusal is a normal result (risk 5), never an exception.
+
+## ADR-028 — Truth cannot reach a prompt by construction
+`ContextEngine` takes only truth-free surfaces (`PlayerView`, `CognitionService`,
+`SocialService`, `RelationshipGraph`, `ContentDatabase`, the profiles table, and two plain
+delegates for location/clock). It holds no `GameState`/`WorldTruth`/`DebugAccess` reference —
+there is simply nothing to leak through. A reflection test asserts no type in `BadDeduction.AI`
+has a field, property or constructor parameter of those types, and a dedicated leak test builds
+prompts for every NPC with roles assigned and asserts no role word or holder-linkage appears.
+The speaker's own secrets are deliberately excluded from the prompt for now: guarding them is
+Phase 10 (hidden objectives) work, and no validator rule could catch a slip today.
+
+## ADR-029 — The validator rejects lies about identity, clamps loud numbers
+`DialogueValidator` rejects output that is malformed (empty/over-long reply, too many or
+over-long facts), role-revealing (the whole words "malvr"/"lumiel", or any forbidden phrase —
+e.g. "{name} is Malvr"), or entity-leaking (a capitalized name in new facts/memories that
+appears nowhere in the speaker's known texts: names, places, their own memories, beliefs, the
+utterance). The forbidden set is derived from hidden roles in `GameSession` — OUTSIDE the AI
+namespace — and passed in as plain strings, so the boundary stays clean. Trust/suspicion
+deltas are *clamped* to ±20, not rejected: a loud number is a calibration issue, not a lie.
+The entity check is intentionally conservative (it can false-positive on sentence-initial
+verbs); fail-safe beats clever here, and the fallback path keeps the game moving.
+
+## ADR-030 — Mock determinism without RNG streams
+`MockAIProvider` is a pure function of `(runSeed, speaker, listener, conversation, utterance)`
+via FNV-1a 64-bit hashing: fixed reply/fact templates with small integer deltas (±4). It never
+touches an RNG stream, so adding dialogue can never shift another system's draws (ADR-002), and
+mock-driven runs are replay-identical — the CI baseline for risk 1. Templates are written to
+pass the validator (no role words, only entities the speaker knows: the listener's name and
+lowercase prose).
+
+## ADR-031 — One fallback for every failure mode
+Refusals (risk 5), validation rejections, and budget exhaustion (risk 4) all funnel into the
+same deterministic fallback: a canned in-fiction line picked by `StableHash(seed, conversation,
+exchangeIndex)` — zero deltas, still recorded as a `dialogue.exchanged` event and perceived by
+both participants. The game never throws at the player for a provider problem. The
+per-conversation budget (10 exchanges) is transient on the orchestrator, never saved:
+conversations are UI-session scoped, and a fresh budget after load is documented behavior.
+
+## ADR-032 — Difficulty scales cognition, never omniscience
+`DifficultySystem` maps Easy/Medium/Hard/Genius to context memory caps (3/5/8/12) and belief
+caps (2/4/6/10): a Genius NPC remembers more of what it perceived, but still only what it
+perceived (ADR-003/ADR-016). `ContradictionSensitivity` (25/50/75/100) is exposed now as the
+Phase 8 hook; nothing reads it yet.
+
+## ADR-033 — Accepted output is stored; the sim never re-calls the provider
+Every exchange — accepted or fallback — is persisted as a `dialogue.exchanged` world event
+(utterance, reply, fallback flag) with both participants perceiving it through the Phase 4
+gate, trust/suspicion applied via `SocialService.Adjust` ("dialogue"), and heard facts added
+as listener evidence via `CognitionService.AddEvidence`. Save → load → continue is therefore
+hash-identical without any provider involvement, pinned by a test. No save-format change was
+needed: conversations are transient; their outcomes are ordinary world events.
+
+## Deferred / known limits
+* Real providers (Claude/OpenAI/Gemini/local) are future `IAIProvider` implementations; the
+  pipeline shape already fits them (structured output + refusal as a value).
+* Provider timeouts/retries and per-conversation token budgets are not modeled; the exchange
+  budget is a count cap only.
+* The speaker's secrets and hidden objectives do not enter the prompt yet (Phase 10).
+* Contradiction detection is Phase 8; the sensitivity knob is parked until then.
+
+## Note — assembly split not attempted (ADR-003 candidate)
+ADR-003 floated enforcing the truth boundary with a separate `Core.Abstractions` assembly in
+Phase 6. Not done: the reflection test (`Ai_namespace_never_touches_truth_types`) enforces the
+same invariant — no `GameState`/`WorldTruth`/`DebugAccess` in any `BadDeduction.AI` member
+signature — with far less build complexity, and it fails loudly the moment someone adds a
+violating member. An assembly split remains an option if engine-side code ever needs the same
+guarantee, but nothing in Phase 6 justified the packaging cost.

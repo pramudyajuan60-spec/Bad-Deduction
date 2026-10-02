@@ -48,4 +48,5 @@ public static class WorldEventTypes
     public const string MemoryRecorded = "cognition.memory_recorded";
     public const string RumorSpread = "cognition.rumor_spread";
     public const string BeliefChanged = "cognition.belief_changed";
+    public const string DialogueExchanged = "dialogue.exchanged";
 }

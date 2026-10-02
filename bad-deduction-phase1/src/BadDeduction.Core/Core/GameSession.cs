@@ -1,3 +1,4 @@
+using BadDeduction.AI;
 using BadDeduction.Characters;
 using BadDeduction.Cognition;
 using BadDeduction.Content;
@@ -34,6 +35,13 @@ public sealed class GameSession
     public PlayerView View { get; }
     public DebugAccess Debug { get; }
 
+    /// <summary>
+    /// Phase 6: the dialogue pipeline (Orchestrator → ContextEngine → provider → validator).
+    /// The provider is the deterministic mock; the forbidden phrases are derived from hidden
+    /// roles HERE, outside the AI namespace, so no truth type ever crosses into it.
+    /// </summary>
+    public DialogueOrchestrator Dialogue { get; }
+
     /// <summary>The main simulation RNG. Wraps State.SimRng, so it is always in sync with saves.</summary>
     public DeterministicRandom Rng { get; }
 
@@ -54,7 +62,40 @@ public sealed class GameSession
         Simulate = new WorldSimulation(state, Time, Events, World, Cognition, content);
         View = new PlayerView(state);
         Debug = new DebugAccess(state);
+        var context = new ContextEngine(
+            View, Cognition, Social, Relationships, content, state.World.Profiles,
+            id => state.World.Characters[id].CurrentLocationId);
+        Dialogue = new DialogueOrchestrator(
+            context,
+            new MockAIProvider(state.Meta.RunSeed),
+            new DialogueValidator(),
+            Cognition, Social, Events,
+            id => state.World.Characters[id].CurrentLocationId,
+            () => new GameTime(state.TotalMinutes),
+            BuildForbiddenPhrases(state),
+            state.Meta.Difficulty,
+            state.Meta.RunSeed);
         Rng = new DeterministicRandom(state.SimRng);
+    }
+
+    /// <summary>
+    /// Derives the validator's forbidden phrases from hidden roles. This runs OUTSIDE the AI
+    /// namespace (which never sees truth types): the validator only ever receives strings.
+    /// The validator additionally rejects the bare role words "malvr"/"lumiel" on its own.
+    /// </summary>
+    private static IReadOnlyList<string> BuildForbiddenPhrases(GameState state)
+    {
+        var phrases = new List<string>();
+        foreach (var (characterId, role) in state.Truth.HiddenRoles)
+        {
+            if (!state.World.Characters.TryGetValue(characterId, out var c)) continue;
+            var roleName = role.ToString();
+            phrases.Add($"{c.DisplayName} is {roleName}");
+            phrases.Add($"{c.DisplayName} is the {roleName}");
+            phrases.Add($"i am {roleName}");
+            phrases.Add($"you are {roleName}");
+        }
+        return phrases;
     }
 
     public static GameSession NewRun(
