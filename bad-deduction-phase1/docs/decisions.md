@@ -470,3 +470,87 @@ definition ids against `data/crimes.json`.
   incident" logic belongs to Phase 8 investigation.
 * One victim per incident in Phase 7; multi-victim incidents (e.g. larger arsons) are future work.
 * Unsealing / case resolution states are not modeled yet (Phase 9+).
+
+---
+
+# Phase 8 — Investigation
+
+```
+InvestigationService (session.Investigate) ── the investigator's toolkit
+  SurveyLocation ── presence reconstructed purely from the movement log (SurveillanceRecord)
+  Interview ── structured topics (event / person / whereabouts) answered from the speaker's
+                 own knowledge; free text stays in DialogueOrchestrator.Exchange (Phase 6)
+  Interrogate ── interview under pressure: flagged on the event + a suspicion nudge
+  RecordStatement ── testimony (not ground truth) -> contradiction check (difficulty-gated)
+  CheckAgainstSurveillance ── investigator-initiated alibi check; always raised when it hits
+  ProposeHypothesis / AttachEvidence ── board theories; integer confidence via BeliefConfidence
+  GetCaseTimeline ── incident chain merged with the case's investigation actions, time-ordered
+InvestigationState (on GameState) ── NextStatementId/HypothesisId/ContradictionId ·
+  Statements · Contradictions · Hypotheses. No RNG anywhere in this subsystem.
+```
+
+## ADR-040 — Surveillance is a derived query, not a system
+`SurveyLocation` reconstructs presence from `character.moved`/`character.departed` events only:
+the initial position is recovered by walking moved-events backward from the character's current
+position (departures never change `CurrentLocationId` — only arrivals do), then a forward pass
+builds the location timeline, with travel intervals as genuine absences. No new persisted state,
+no RNG, fully deterministic. The request itself is logged as `investigation.surveyed` so it
+appears on the case timeline. The record is deliberately setting-agnostic (audit §C-1): CCTV
+footage, a watchman's log or gate ledgers are skins over the same mechanic.
+
+## ADR-041 — Interviews are structured; free text stays in the dialogue pipeline
+`Interview` answers three topic shapes — `event:{id}`, `person:{id}`, `whereabouts:{minute}` —
+from the speaker's own knowledge: event answers quote the speaker's memory summary (or the
+canonical "don't know"), person answers describe the relationship (kind + trust band) or admit
+strangership, whereabouts answers reconstruct the speaker's own movement record into a
+structured claim (`at:{loc}@{min}[#{detail}]` / `traveling:{from}>{to}@{min}`). NPCs are
+currently truthful about whereabouts (their own record); deliberate lies arrive with hidden
+objectives in Phase 10. Free-text conversation remains `DialogueOrchestrator.Exchange` (Phase 6):
+the two pipelines share the knowledge gate but serve different UI (interrogation panel vs
+dialogue panel). `Interrogate` is an interview under pressure — flagged in the event data and
+carrying a real +5 suspicion nudge toward the interrogator via `SocialService.Adjust`.
+
+## ADR-042 — Contradictions are scored, then gated by difficulty
+The incompatibility model is deliberately small and exact: whereabouts claims are structured,
+so "two places at once" is arithmetic (|Δminutes| < window, different places → Blatant, 100);
+same place + same window + conflicting details → Subtle (50); denied-knowledge-then-claimed
+(or the reverse) on one topic → Subtle (60); changed accounts on one topic → Subtle (50).
+A clash is flagged when its score reaches `101 - ContradictionSensitivity(difficulty)`:
+Easy(25)→76 blatant-only, Medium(50)→51 adds denial tells, Hard(75)→26 adds all subtle,
+Genius(100)→1 flags everything and widens the alibi window to 120 minutes (vs 60).
+Every detected clash is persisted; sub-threshold ones are kept unflagged and unlogged —
+so Easy and Genius runs over identical testimony produce the measurably different detection
+rates the vertical slice's acceptance metrics demand. `CheckAgainstSurveillance` is the
+investigator explicitly checking an alibi: a hit is always Blatant and always raised.
+
+## ADR-043 — Hypotheses reuse belief math; false evidence may support them
+A hypothesis is a board-level theory: confidence is derived (never stored) from attached
+evidence counts via `CognitionRules.BeliefConfidence` — the same `50 + 8·(for−against)` integer
+formula as character beliefs, so theories and minds speak the same language. Only band
+transitions log `investigation.hypothesis_updated`. Evidence must exist and be discovered
+(ADR-037's knowledge gate extends to theorizing), but FALSE evidence attaches freely — that
+is the core of the game — and its authenticity never changes (ADR-035). Proposition ids are
+unique: one card per theory.
+
+## ADR-044 — The case timeline is a merge, not a store
+`GetCaseTimeline` filters the event log for the crime id carried in every crime and
+investigation event's data (explicit `crimeId` parameter beats the auto-derived link from
+incident-event topics) and orders by (timestamp, id). Nothing new is persisted: the timeline
+is a read-only view for the Phase 11 investigation board, and `CausalChain` still reproduces
+any of its threads root-first.
+
+## Save format v7
+Adds `State.Investigation` (statements, contradictions, hypotheses, counters). Migration
+v6→v7 initializes empty containers with fresh counters — there is no RNG in this subsystem,
+so nothing needs seeding. The validator checks: id/key consistency, speaker/character/event/
+crime references, valid topic grammar, non-empty claims within the length cap, valid severity
+values, hypothesis proposition uniqueness, and evidence references that exist and are not
+double-attached.
+
+## Deferred / known limits
+* NPCs do not lie about whereabouts yet; contradiction-vs-surveillance only bites on
+  injected/testimony claims until Phase 10 gives characters hidden objectives.
+* Statements have no per-statement reliability % yet (the UI panel in `Desain UIUX.png`
+  shows one); confidence lives on memories and hypotheses, not on testimony.
+* No statement retraction/editing: testimony is append-only, like the event log.
+* Background-tier surveillance (city-wide, low-detail) awaits off-slice populations (Phase 12).

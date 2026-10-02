@@ -1,5 +1,6 @@
 using BadDeduction.Characters;
 using BadDeduction.Crime;
+using BadDeduction.Investigation;
 using BadDeduction.World;
 
 namespace BadDeduction.Core;
@@ -51,6 +52,9 @@ public sealed class GameState
     /// <summary>Phase 7: crimes, scenes and evidence (plain data; see CrimeService).</summary>
     public CrimeState Crime { get; set; } = new();
 
-    // Phases 8+ add: Police, Hypotheses, Surveillance, Timeline.
+    /// <summary>Phase 8: statements, contradictions and hypotheses (plain data; see InvestigationService).</summary>
+    public InvestigationState Investigation { get; set; } = new();
+
+    // Phases 9+ add: Police AI, hidden-identity campaigns, presentation.
     // Each addition bumps SaveSystem.CurrentFormatVersion.
 }

@@ -13,9 +13,10 @@ internal static class TestSupport
     public static GameSession NewPopulatedSession(
         ulong seed = 42,
         Campaign campaign = Campaign.Lumiel,
-        ContentDatabase? content = null)
+        ContentDatabase? content = null,
+        Difficulty difficulty = Difficulty.Medium)
     {
-        var s = GameSession.NewRun(seed, campaign, Difficulty.Medium, content ?? LoadContent());
+        var s = GameSession.NewRun(seed, campaign, difficulty, content ?? LoadContent());
 
         void Add(string id, string name, int age, string job, CharacterKind kind, string home, string? work = null) =>
             s.World.AddCharacter(new CharacterState

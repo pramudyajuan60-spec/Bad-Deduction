@@ -1,6 +1,7 @@
 using BadDeduction.Characters;
 using BadDeduction.Content;
 using BadDeduction.Crime;
+using BadDeduction.Investigation;
 using BadDeduction.Social;
 using BadDeduction.World;
 
@@ -37,6 +38,7 @@ public static class GameStateValidator
         errors.AddRange(ValidateCognition(state));
         errors.AddRange(ValidateTravel(state));
         errors.AddRange(ValidateCrime(state));
+        errors.AddRange(ValidateInvestigation(state));
 
         // Event log
         var log = state.EventLog;
@@ -192,6 +194,58 @@ public static class GameStateValidator
             if (e.DiscoveredAt is { } eat && (eat < 0 || eat > state.TotalMinutes))
                 errors.Add($"Evidence '{e.Id}' has an impossible discovery timestamp.");
         }
+        return errors;
+    }
+
+    private static IEnumerable<string> ValidateInvestigation(GameState state)
+    {
+        var errors = new List<string>();
+        var inv = state.Investigation;
+        if (inv.NextStatementId < 1) errors.Add("Investigation.NextStatementId is less than 1.");
+        if (inv.NextHypothesisId < 1) errors.Add("Investigation.NextHypothesisId is less than 1.");
+        if (inv.NextContradictionId < 1) errors.Add("Investigation.NextContradictionId is less than 1.");
+
+        foreach (var (key, s) in inv.Statements)
+        {
+            if (key != s.Id) errors.Add($"Statement key '{key}' does not match id '{s.Id}'.");
+            if (!state.World.Characters.ContainsKey(s.SpeakerId)) errors.Add($"Statement '{s.Id}' has unknown speaker '{s.SpeakerId}'.");
+            if (!InvestigationRules.IsValidTopic(s.Topic)) errors.Add($"Statement '{s.Id}' has an invalid topic '{s.Topic}'.");
+            if (string.IsNullOrWhiteSpace(s.Claim)) errors.Add($"Statement '{s.Id}' has an empty claim.");
+            if (s.Claim.Length > InvestigationRules.MaxClaimLength) errors.Add($"Statement '{s.Id}' has an over-long claim.");
+            if (s.Timestamp < 0 || s.Timestamp > state.TotalMinutes) errors.Add($"Statement '{s.Id}' has an impossible timestamp.");
+            if (s.SourceEventId is { } seid && !state.EventLog.TryGet(seid, out _))
+                errors.Add($"Statement '{s.Id}' references unknown source event {seid}.");
+            if (s.CrimeId is not null && !state.Crime.Crimes.ContainsKey(s.CrimeId))
+                errors.Add($"Statement '{s.Id}' references unknown crime '{s.CrimeId}'.");
+        }
+
+        foreach (var (key, c) in inv.Contradictions)
+        {
+            if (key != c.Id) errors.Add($"Contradiction key '{key}' does not match id '{c.Id}'.");
+            if (!inv.Statements.ContainsKey(c.StatementId)) errors.Add($"Contradiction '{c.Id}' references unknown statement '{c.StatementId}'.");
+            if (c.AgainstStatementId is not null && !inv.Statements.ContainsKey(c.AgainstStatementId))
+                errors.Add($"Contradiction '{c.Id}' references unknown statement '{c.AgainstStatementId}'.");
+            if (!Enum.IsDefined(c.Severity)) errors.Add($"Contradiction '{c.Id}' has an invalid severity value.");
+            if (string.IsNullOrWhiteSpace(c.Reason)) errors.Add($"Contradiction '{c.Id}' has an empty reason.");
+            if (c.Timestamp < 0 || c.Timestamp > state.TotalMinutes) errors.Add($"Contradiction '{c.Id}' has an impossible timestamp.");
+        }
+
+        foreach (var (key, h) in inv.Hypotheses)
+        {
+            if (key != h.Id) errors.Add($"Hypothesis key '{key}' does not match id '{h.Id}'.");
+            if (string.IsNullOrWhiteSpace(h.PropositionId)) errors.Add($"Hypothesis '{h.Id}' has an empty proposition id.");
+            if (string.IsNullOrWhiteSpace(h.Description)) errors.Add($"Hypothesis '{h.Id}' has an empty description.");
+            if (h.UpdatedAt < 0 || h.UpdatedAt > state.TotalMinutes) errors.Add($"Hypothesis '{h.Id}' has an impossible timestamp.");
+            var seenEvidence = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var eid in h.SupportingEvidenceIds.Concat(h.RefutingEvidenceIds))
+            {
+                if (!state.Crime.Evidence.ContainsKey(eid)) errors.Add($"Hypothesis '{h.Id}' references unknown evidence '{eid}'.");
+                if (!seenEvidence.Add(eid)) errors.Add($"Hypothesis '{h.Id}' attaches evidence '{eid}' twice.");
+            }
+        }
+        var seenProps = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var h in inv.Hypotheses.Values)
+            if (!seenProps.Add(h.PropositionId)) errors.Add($"Duplicate hypothesis proposition '{h.PropositionId}'.");
         return errors;
     }
 

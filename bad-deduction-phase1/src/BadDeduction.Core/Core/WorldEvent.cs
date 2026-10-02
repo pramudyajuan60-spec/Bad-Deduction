@@ -52,4 +52,11 @@ public static class WorldEventTypes
     public const string CrimeIncident = "crime.incident";
     public const string CrimeDiscovered = "crime.discovered";
     public const string EvidenceDiscovered = "crime.evidence_discovered";
+    public const string Interviewed = "investigation.interviewed";
+    public const string Interrogated = "investigation.interrogated";
+    public const string StatementRecorded = "investigation.statement_recorded";
+    public const string ContradictionFound = "investigation.contradiction_found";
+    public const string Surveyed = "investigation.surveyed";
+    public const string HypothesisProposed = "investigation.hypothesis_proposed";
+    public const string HypothesisUpdated = "investigation.hypothesis_updated";
 }

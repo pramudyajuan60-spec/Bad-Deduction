@@ -26,7 +26,7 @@ public sealed class SaveEnvelope
 public static class SaveSystem
 {
     public const string GameId = "BadDeduction";
-    public const int CurrentFormatVersion = 6;
+    public const int CurrentFormatVersion = 7;
 
     /// <summary>Migrations keyed by the version they upgrade FROM (operate on the raw JSON tree).</summary>
     private static readonly Dictionary<int, Action<JsonNode>> Migrations = new()
@@ -87,6 +87,15 @@ public static class SaveSystem
                 CrimeRng = DeterministicRandom.Derive(seed, "crime.incident").Snapshot(),
             };
             state["Crime"] = JsonSerializer.SerializeToNode(crime, Compact);
+        },
+        // v6 -> v7 (Phase 8): runs gain the investigation state (statements, contradictions,
+        // hypotheses). Old saves get empty containers with fresh counters; there is no RNG
+        // in the investigation subsystem, so nothing else needs seeding.
+        [6] = root =>
+        {
+            if (root["State"] is not JsonObject state) return;
+            if (state["Investigation"] is not null) return;
+            state["Investigation"] = JsonSerializer.SerializeToNode(new Investigation.InvestigationState(), Compact);
         },
     };
 

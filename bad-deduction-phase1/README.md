@@ -11,7 +11,7 @@ that emerge from the simulation instead of a scripted solution.
 
 ## Status
 
-**Phases 1-7 complete.**
+**Phases 1-8 complete.**
 * Phase 1 (Foundation): deterministic RNG, game time, event bus + causal world-event log, versioned
   save/load with state hashing, location content, truth-vs-player-view separation.
 * Phase 2 (Characters): seeded cast generation (`session.Cast.Generate(new CastSpec())` → 17 civilians
@@ -45,13 +45,22 @@ that emerge from the simulation instead of a scripted solution.
   true), arrival-driven discovery through the Phase 4 knowledge gate, derived witnesses, and a
   causal timeline view. Save format v6.
 
-214 tests. No presentation layer yet (Phase 11).
+* Phase 8 (Investigation): `session.Investigate` — surveillance as a pure query over the movement
+  log (`SurveillanceRecord`: who was where, when), structured interviews from each NPC's own
+  knowledge (free text stays in `session.Dialogue`), interrogations under pressure (recorded +
+  a suspicion nudge), statements as testimony, difficulty-gated contradiction detection
+  (blatant always flagged; subtle by sensitivity; Genius holds wider alibi windows), explicit
+  surveillance cross-checks, and hypotheses with integer confidence reused from belief math
+  (false evidence may support one — it stays false). Merged case timelines for the board.
+  Save format v7.
+
+244 tests. No presentation layer yet (Phase 11).
 
 ## Layout
 
 ```
 src/BadDeduction.Core/     engine-free simulation library (net8.0)
-  Core/  World/  Characters/  Social/  Cognition/  Content/  AI/  Crime/
+  Core/  World/  Characters/  Social/  Cognition/  Content/  AI/  Crime/  Investigation/
 tests/BadDeduction.Tests/  dependency-free test runner
 data/                      data-driven content (locations, occupations, goals, character secrets, names, crimes)
 docs/                      audit, roadmap, decisions
