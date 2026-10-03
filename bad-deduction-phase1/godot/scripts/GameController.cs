@@ -28,6 +28,21 @@ public partial class GameController : Node
     /// <summary>Ollama server base URL, used when <see cref="ProviderKind"/> is Ollama.</summary>
     public string OllamaEndpoint { get; set; } = "http://localhost:11434";
 
+    /// <summary>2D explorer time scale: game minutes advanced per real second while walking.</summary>
+    public int MinutesPerSecond { get; set; } = 1;
+
+    /// <summary>
+    /// NPC-initiated conversation opener, set by <c>Main.OpenDialogueWith</c> and
+    /// consumed once by DialoguePanel.Refresh. Null when no opener is pending.
+    /// </summary>
+    public sealed class PendingOpener
+    {
+        public string NpcId { get; set; } = "";
+        public string OpeningLine { get; set; } = "";
+    }
+
+    public PendingOpener? PendingNpcOpener { get; set; }
+
     /// <summary>Currently inspected NPC (shared across panels).</summary>
     public string SelectedNpcId
     {

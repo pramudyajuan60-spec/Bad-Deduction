@@ -1,6 +1,7 @@
 using BadDeduction.Agenda;
 using BadDeduction.Characters;
 using BadDeduction.Crime;
+using BadDeduction.Initiative;
 using BadDeduction.Investigation;
 using BadDeduction.Police;
 using BadDeduction.World;
@@ -59,6 +60,11 @@ public sealed class GameState
 
     /// <summary>Phase 9: alert level, duty roster, case states, per-officer RNG (plain data; see PoliceService).</summary>
     public PoliceState Police { get; set; } = new();
+
+    /// <summary>
+    /// Phase 13: NPC-initiated dialogue queue and cooldowns (plain data; see NpcInitiativeService).
+    /// </summary>
+    public NpcInitiativeState Initiative { get; set; } = new();
 
     /// <summary>
     /// Phase 10: hidden-genius objectives and incident attributions (plain data; see

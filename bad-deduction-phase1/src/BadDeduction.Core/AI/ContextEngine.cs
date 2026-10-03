@@ -22,6 +22,9 @@ namespace BadDeduction.AI;
 ///   <see cref="DifficultySystem.ContextBeliefCap"/>.</item>
 /// <item>SITUATION — day, time of day, clock time, and where the speaker is.</item>
 /// <item>UTTERANCE — what the listener just said, verbatim (truncated).</item>
+/// <item>THREAT — when the listener's utterance was classified as a threat: speaker-known
+///   reaction guidance (their own fear/courage, the location). Only present when a threat
+///   was detected; uses no hidden information.</item>
 /// <item>INSTRUCTIONS — reply in character within the length cap, plus the structured fields.</item>
 /// </list>
 /// <para/>
@@ -66,8 +69,16 @@ public sealed class ContextEngine
         _currentLocationOf = currentLocationOf;
     }
 
+    /// <param name="threat">
+    /// Phase 13: the <see cref="ThreatDetector"/> classification of the utterance. When not
+    /// <see cref="ThreatLevel.None"/>, a THREAT section is appended using only speaker-known
+    /// data (their own fear of the listener, their own courage, the location name) so the
+    /// provider reacts to the threat in character instead of ignoring it. Optional so all
+    /// existing call sites keep compiling.
+    /// </param>
     public string BuildPrompt(
-        string speakerId, string listenerId, string utterance, Difficulty difficulty, GameTime now)
+        string speakerId, string listenerId, string utterance, Difficulty difficulty, GameTime now,
+        ThreatLevel threat = ThreatLevel.None)
     {
         var speaker = RequireProfile(speakerId);
         var listener = RequireProfile(listenerId);
@@ -131,8 +142,12 @@ public sealed class ContextEngine
         sb.AppendLine();
         sb.AppendLine($"{listener.DisplayName} says to you: \"{Truncate(utterance, AIRules.MaxUtteranceLength)}\"");
         sb.AppendLine();
+        if (threat != ThreatLevel.None)
+            AppendThreatSection(sb, speakerId, listener, rel, threat);
         sb.AppendLine(
             $"Reply in character in at most {AIRules.MaxReplyLength} characters. " +
+            "Address what they just said FIRST and DIRECTLY — answer their question, react to their words, " +
+            "and only then add anything else. " +
             "Then decide, as structured fields: trust_delta (-20..20, how this changes your trust in them), " +
             "suspicion_delta (-20..20), new_facts (things you learned from them, as short phrases, max 5), " +
             "memory_summary (one line for your memory of this exchange), " +
@@ -140,6 +155,35 @@ public sealed class ContextEngine
             "Never reveal anything you do not actually know; never speak of hidden masters or secret roles.");
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Phase 13: threat-reaction guidance built ONLY from speaker-known data — the speaker's
+    /// own fear of the listener (their side of the relationship), their own courage trait,
+    /// and the public location name. No roles, no third-party knowledge, so the leak test
+    /// still passes.
+    /// </summary>
+    private void AppendThreatSection(
+        StringBuilder sb, string speakerId, PublicCharacterInfo listener,
+        RelationshipView rel, ThreatLevel threat)
+    {
+        var label = threat switch
+        {
+            ThreatLevel.DeathThreat => "death threat",
+            ThreatLevel.ExplicitThreat => "explicit threat",
+            _ => "menacing remark",
+        };
+        var courage = _profiles.TryGetValue(speakerId, out var profile) ? profile.Personality.Courage : 50;
+        sb.Append($"THREAT: {listener.DisplayName} just threatened you ({label}). " +
+            $"Your fear of them is {rel.Fear}/100; your courage is {courage}/100. ");
+        var locationId = _currentLocationOf(speakerId);
+        if (_content.HasLocation(locationId)
+            && _content.GetLocation(locationId).Visibility == LocationVisibility.Public)
+            sb.Append("You are in public — others can see this. ");
+        sb.AppendLine("React IN CHARACTER and DIRECTLY: address the threat first — " +
+            "a fearful person begs, freezes, or flees; a courageous person stands their ground; " +
+            "a hostile person threatens back. NEVER ignore a threat or change the subject.");
+        sb.AppendLine();
     }
 
     /// <summary>

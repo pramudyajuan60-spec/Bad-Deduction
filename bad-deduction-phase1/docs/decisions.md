@@ -860,3 +860,223 @@ header; missing fields degrade to zero deltas, not refusal). The provider does
 NOT truncate over-long fields — over-length stays the validator's documented
 rejection, keeping one gate for output shape. `new_facts` splits on newlines and
 semicolons only (never commas, which appear inside facts).
+
+## Phase 13 — 2D open-world presentation + smarter NPC dialogue
+
+### Save format v9 (unchanged)
+Phase 13 adds `State.Initiative` (NPC-initiative queue, cooldowns, RNG stream) and `PoliceState.Disturbances`, both purely additive: property initializers supply defaults for older saves, and `GameSession` zero-guards the initiative RNG stream (deriving `(\runSeed, "npc.initiative")` when absent). No migration needed; `GameStateValidator` additionally checks disturbance references.
+
+## ADR-080 — 2D presentation / simulation separation
+
+**Context.** Phase 13 adds a 2D top-down explorer on top of the existing simulation.
+The sim already enforces UI_RULES.md (no `State.Truth` / `WorldTruth` in view code).
+
+**Decision.** The 2D layer is presentation-only: it may move the camera, draw
+programmer art, and run pure functions of (seed, location, game time), but it NEVER
+writes sim state directly. All mutations go through the already-sanctioned services:
+`World.MoveCharacter` (travel, honoring police cordons), `Simulate.Advance` (time),
+`Dialogue.Exchange` / `Dialogue.OpeningLine` (talk), `Initiative.Evaluate` /
+`TryAccept` (NPC-initiated chats). Grep checks from UI_RULES.md apply unchanged.
+
+**Consequences.** The 2D view cannot desync hidden truth because it cannot touch it;
+any Core-side balance change propagates automatically. Visual bugs stay visual.
+
+## ADR-081 — Per-location procedural scenes
+
+**Context.** 12 location nodes need walkable grounds without hand-authored art.
+
+**Decision.** Each location is generated in code at `BuildLocation`: a 1600×1000
+dark-fantasy ground, 6–10 decor shapes, a name banner, and one gold exit marker per
+neighbor from `Content.Neighbors`. Layout comes from
+`DeterministicRandom.Derive(runSeed, "2d." + locationId)` (decor/exits) and
+`Derive(runSeed, $"2d.{locationId}.npc.{npcId}")` per NPC — never `System.Random`,
+whose seeded sequence is not stable across runtimes (see DeterministicRandom docs).
+Same seed + location ⇒ identical grounds on every run and every rebuild.
+
+**Consequences.** Zero art assets to maintain; layouts are reproducible for bug
+reports. Programmer art is visibly programmer art (documented in 2D_CONTROLS.md).
+
+## ADR-082 — Time-scale model for the explorer
+
+**Context.** Walking in real time while the sim thinks in minutes needs a bridge.
+
+**Decision.** While the Explore panel is visible and no overlay (New Run /
+Resolution / Dialogue) is open, each real second advances
+`GameController.MinutesPerSecond` game minutes (default 1) via the existing
+`AdvanceMinutes` path — so the `TimeAdvanced` signal keeps every panel in sync.
+Travel through exits uses the real neighbor minutes from `Content.Neighbors`.
+
+**Consequences.** Time only flows while exploring, never while reading panels or
+mid-conversation. The scale is one tunable int; NPC routines and the Day-7
+resolution behave exactly as with the menu time buttons.
+
+## ADR-083 — Proximity + initiative UX
+
+**Context.** Two conversation triggers must coexist: player-initiated (walk up, press
+E) and NPC-initiated (the NPC wants to talk).
+
+**Decision.** Proximity (< 96 px) shows a contextual prompt; `E` opens normal
+dialogue via the existing `SelectedNpcId` path. NPCs with a pending initiative
+(`Initiative.Evaluate`, re-run on every Refresh and time advance) render a gold "!"
+bubble; `E` near them runs the accept flow — `TryAccept` → `OpeningLine` →
+`Main.OpenDialogueWith`, which stashes the opener on
+`GameController.PendingNpcOpener` for `DialoguePanel.Refresh` to consume once,
+rendering the NPC's line before the player types. If the NPC left, no bubble
+renders; `E` with nobody near does nothing.
+
+**Consequences.** One key, two flows, no modal popups interrupting movement. The
+opener seam is a single consume-once property — simple, but a second opener
+overwrites the first (acceptable: initiatives are accepted immediately at the NPC).
+
+## ADR-084 — Why SubViewport for the 2D world
+
+**Context.** The explorer needs its own camera, world coordinates, and draw order
+without disturbing the panel UI.
+
+**Decision.** Host the world in a `SubViewportContainer` + `SubViewport` (2D, own
+viewport, GUI input disabled) with a `Camera2D` (limits = world bounds, position
+smoothing) following the player; HUD is a mouse-ignoring `Control` overlay on top.
+All world art is drawn by lightweight `Node2D` classes in code — no `.tscn` scene
+graph to keep in sync with 12 procedural locations.
+
+**Consequences.** Camera, zoom, and (later) lighting/shaders are trivially
+available; the HUD never intercepts clicks meant for panels. Cost: one extra
+viewport render target — negligible at this scene complexity.
+
+## ADR-085 — Threat detection is a deterministic keyword classifier, not a model call
+
+*Context.* Playtesting showed NPCs ignoring threats ("I want to kill you" got a
+non-answer). The player may threaten in English or Indonesian. Detection must run
+*before* the provider is consulted (it steers the prompt and the game event), so
+it cannot depend on any LLM — mock, local or otherwise.
+
+*Decision.* `AI.ThreatDetector.Detect` is a pure function: lowercase, expand a
+fixed contraction list (`i'll`→`i ll`, `don't`→`dont`, …), replace non-letters
+with spaces, collapse whitespace, pad with spaces, then phrase-match with word
+boundaries. Three levels, checked most-severe-first: DeathThreat → ExplicitThreat
+→ Menacing. Phrase lists cover English and Indonesian (`kubunuh`, `akan kubunuh`,
+`membunuhmu`, `mati kau`, `awas kau`, `peringatan terakhir`, …).
+
+*Consequences.*
+- Same utterance → same level on every platform, no RNG, no state (ADR-002 spirit).
+- Word boundaries prevent substring false positives: "skill issue" never trips on
+  "kill", passive "dibunuh" never trips on "kubunuh" — pinned by tests.
+- The classifier is deliberately dumb: sarcasm, negation ("I would never kill
+  you") and novel phrasings are missed. That is accepted — a false negative only
+  means "no threat pipeline this exchange", and the prompt still tells the NPC to
+  address what was said directly (ADR-086's INSTRUCTIONS change).
+
+---
+
+## ADR-086 — A detected threat is a game event, not just prompt flavor
+
+*Context.* A threat should change the world: the target's fear spikes, witnesses
+grow wary, the NPC remembers being threatened (so it can threaten back later),
+and a death threat in public is a police matter.
+
+*Decision.*
+- `DialogueOrchestrator.Exchange` classifies the utterance and passes the level to
+  `ContextEngine.BuildPrompt` (new optional `threat` parameter — existing 5-arg
+  call sites compile unchanged). When the level is not None, the prompt gains a
+  THREAT section plus a strengthened INSTRUCTION ("Address what they just said
+  FIRST and DIRECTLY…"). The THREAT section uses only speaker-known data (their
+  own fear of the listener, their own courage, the public location name, and a
+  public-visibility note from `ContentDatabase`) — the leak test passes on it.
+- After the exchange event is recorded, `Social.ThreatService.HandleThreat`
+  records `dialogue.threat` (participants `[threatener, target]`, level/severity/
+  witness-count data, `CausedBy` → the exchange), applies social deltas
+  (target→threatener: Fear +40/25/12, Trust −15/−10/−5, Suspicion +20/12/6;
+  each witness→threatener: Suspicion +10/6/3, Fear +8/5/2 — Death/Explicit/
+  Menacing), routes the event through the Phase 4 gate (`Perceive`, Witnessed)
+  for target + witnesses, and calls `PoliceService.ReportDisturbance` when the
+  level is DeathThreat AND the location is public or any witness is police.
+- `HandleThreat` no-ops (never throws) on self-threats or `ThreatLevel.None`.
+
+*Consequences.* Threats now compose with the rest of the sim: fear feeds
+compliance (ADR-014), memories feed initiative motives (ADR-088), disturbances
+feed the alert ladder (ADR-087). Severity is an integer 1–3 (`SeverityOf`).
+
+---
+
+## ADR-087 — Disturbance reports step the alert ladder to Alert, never to Manhunt
+
+*Context.* ADR-048: "the alert ladder steps on facts, never jumps." A shouted
+death threat is a fact, but it is not a murder investigation — it must not be
+able to push the city to Manhunt by itself.
+
+*Decision.*
+- `PoliceState` gains `Disturbances: List<DisturbanceReport>` (timestamp,
+  location, subject, severity — plain data, additive).
+- `PoliceService.ReportDisturbance` records `police.disturbance_reported`,
+  appends the report and calls `EvaluateAlert()`.
+- `EvaluateAlert` counts recent severe disturbances (age < 1440 min, severity ≥ 2;
+  new `PoliceRules` constants, no existing constant changed). A count ≥ 2 acts
+  exactly like `open.Count >= AlertOpenCrimeCount`: it can step Calm → Alert and
+  hold Alert, but the Manhunt branch is untouched — threats alone can never reach
+  Manhunt. With no disturbances on record the computation is bit-for-bit the old
+  one.
+
+*Consequences.* Two public death threats (or death threats in front of officers)
+raise the city's alertness one rung — more patrols via the existing duty scaling
+— without inventing a crime case. Disturbances age out after a day, so the ladder
+can step back down.
+
+---
+
+## ADR-088 — NPC initiative: UI-driven evaluation, motives as tags, NPC speaks first
+
+*Context.* The player asked for NPCs that can start conversations. Initiative is
+a UI-session concern (the dialogue panel needs "who wants to talk"), but motives
+must come from real sim state, and the resulting conversation must go through
+the same provider → validator → apply pipeline as player-initiated dialogue.
+
+*Decision.*
+- New `Initiative.NpcInitiativeService` with a persisted `NpcInitiativeState` on
+  `GameState` (queue, per-NPC cooldowns, dedicated `InitiativeRng` stream derived
+  from `(runSeed, "npc.initiative")` — ADR-002 pattern, so initiative draws never
+  shift other streams; old saves get the same stream via a zero-guard in
+  `GameSession`, no migration needed since property initializers supply defaults).
+- `Evaluate()` is called by the UI, not the sim: for each living NPC at the
+  player's location (excluding the player), skipped when already pending or on
+  cooldown (1440 min). Motives derive from real data — ThreatenBack (fear ≥ 60),
+  Confront (suspicion ≥ 70), Plead (civilian, trust < 30, fear ≥ 40), Warn
+  (affection ≥ 60 + a confidence ≥ 60 memory), ShareRumor (a Told-source memory
+  the player lacks) — each with one seeded draw (`NextInt(0,100) < weight`:
+  70/50/45/40/30). At most one motive per NPC per Evaluate (highest-priority
+  passing motive wins); the queue caps at 3, dropping lowest-priority beyond the
+  cap (priority = enum order, later = more severe). Deterministic: same state +
+  same stream position → same queue (tested).
+- `MotiveDetails` is a motive *tag*, not free text: one of the NPC's own memory
+  summaries (ThreatenBack anchors on an actual threat memory; ShareRumor on the
+  rumor itself) or a line built from their own relationship values and the
+  player's public name. Speaker-known only — safe to hand to the prompt builder.
+- Enqueue/dequeue record nothing in the event log (a pending decision is not a
+  world fact). `DialogueOrchestrator.OpeningLine(npc, player, initiative)` has the
+  NPC speak first via a stage-direction utterance through the shared pipeline and
+  records `dialogue.exchanged` with `initiative=true` + motive data. The threat
+  pipeline is deliberately NOT run on opening lines: the motive already encodes
+  intent, and `dialogue.threat` describes player threats.
+
+*Consequences.* The Godot UI calls `session.Initiative.Evaluate()` when the
+dialogue panel opens, shows pending NPCs, and on accept calls
+`session.Initiative.TryAccept` + `session.Dialogue.OpeningLine`. Save/load
+preserves the queue (tested round-trip).
+
+---
+
+## ADR-089 — The mock provider answers threats from a dedicated template pool
+
+*Context.* The mock is the CI baseline and the default experience (ADR-030). A
+threatened NPC answering "Interesting. Tell me more" breaks the fiction the
+whole phase is trying to fix.
+
+*Decision.* `MockAIProvider.Complete` branches on `ThreatDetector.Detect`: threat
+utterances get four dedicated replies ("W-wait. Take that back — I don't want
+trouble.", "Threaten me again and I'll scream for the guard!", …), picked by the
+same hash (still a pure function of seed + request, still no RNG stream), with
+fixed trust −3 / suspicion +4 and zero or one fact ("{listener} threatened me.").
+Templates are validator-safe (no role words; only the known listener name in
+facts/memories).
+
+*Consequences.* Mock-driven runs stay replay-identical and validator-clean, and a
+threat now visibly lands even with no LLM configured.

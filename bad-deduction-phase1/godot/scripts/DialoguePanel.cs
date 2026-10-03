@@ -44,7 +44,7 @@ public partial class DialoguePanel : PanelContainer, IPanel
         send.Pressed += Send;
         row.AddChild(send);
         root.AddChild(row);
-        root.AddChild(UiTheme.DimLabel("Mock provider: replies are deterministic stand-ins. Real LLM providers plug into IAIProvider later."));
+        root.AddChild(UiTheme.DimLabel("Scripted provider is deterministic; pick Ollama on the New Run screen for local-LLM dialogue."));
     }
 
     public void Refresh()
@@ -65,6 +65,18 @@ public partial class DialoguePanel : PanelContainer, IPanel
         var rel = s.Social.View("c_player", id);
         _bandLabel.Text = $"{rel.Kind?.ToString() ?? "Stranger"} ({rel.Band}) — Trust {rel.Trust}/100 · Suspicion {rel.Suspicion}/100";
         _input.Editable = true;
+
+        // NPC-initiated conversation: show their opening line in the log before the
+        // player types anything. Consumed once; a stale opener for another NPC waits.
+        var opener = g.PendingNpcOpener;
+        if (opener is not null && opener.NpcId == id)
+        {
+            g.PendingNpcOpener = null;
+            if (!_history.TryGetValue(id, out var lines))
+                _history[id] = lines = new System.Collections.Generic.List<string>();
+            lines.Add($"[color=#9a958a]{Escape(pub.DisplayName)}:[/color] {Escape(opener.OpeningLine)} [color=#5f5b52](they approached you)[/color]");
+        }
+
         RenderLog(id);
     }
 

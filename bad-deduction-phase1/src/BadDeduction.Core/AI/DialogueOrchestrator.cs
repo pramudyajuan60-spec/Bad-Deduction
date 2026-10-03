@@ -1,5 +1,6 @@
 using BadDeduction.Cognition;
 using BadDeduction.Core;
+using BadDeduction.Initiative;
 using BadDeduction.Social;
 
 namespace BadDeduction.AI;
@@ -60,6 +61,7 @@ public sealed class DialogueOrchestrator
     private readonly IReadOnlyList<string> _forbiddenPhrases;
     private readonly Difficulty _difficulty;
     private readonly ulong _seed;
+    private readonly ThreatService? _threatService;
     private readonly Dictionary<string, int> _exchangesPerConversation = new();
 
     public DialogueOrchestrator(
@@ -73,7 +75,8 @@ public sealed class DialogueOrchestrator
         Func<GameTime> clock,
         IReadOnlyList<string> forbiddenPhrases,
         Difficulty difficulty,
-        ulong seed)
+        ulong seed,
+        ThreatService? threatService = null)
     {
         _context = context;
         _provider = provider;
@@ -86,11 +89,17 @@ public sealed class DialogueOrchestrator
         _forbiddenPhrases = forbiddenPhrases;
         _difficulty = difficulty;
         _seed = seed;
+        _threatService = threatService;
     }
 
     /// <summary>
     /// One line of dialogue: the listener says <paramref name="utterance"/>, the speaker
     /// (NPC) replies. Returns what was said and whether a real provider output was applied.
+    /// <para/>
+    /// Phase 13: the utterance is classified by <see cref="ThreatDetector"/>; the level
+    /// steers the prompt (THREAT section) and, when a <see cref="ThreatService"/> is wired,
+    /// the threat is applied as a game event afterwards. The listener — the one who spoke —
+    /// is the threatener; the speaker (NPC) is the target.
     /// </summary>
     public DialogueResult Exchange(
         string speakerId, string listenerId, string utterance,
@@ -102,6 +111,75 @@ public sealed class DialogueOrchestrator
             throw new ArgumentException("An utterance is required.", nameof(utterance));
 
         conversationId ??= $"{speakerId}>{listenerId}";
+        var cleanUtterance = utterance.Length > AIRules.MaxUtteranceLength
+            ? utterance.Substring(0, AIRules.MaxUtteranceLength)
+            : utterance;
+        var threat = ThreatDetector.Detect(cleanUtterance);
+
+        var result = RunConversation(speakerId, listenerId, cleanUtterance, conversationId,
+            causedBy, threat, extraData: null);
+
+        if (threat != ThreatLevel.None && _threatService is not null)
+            _threatService.HandleThreat(listenerId, speakerId, threat,
+                _currentLocationOf(speakerId), result.ExchangeEventId);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Phase 13: the NPC speaks FIRST, acting on an accepted <see cref="NpcInitiative"/>
+    /// (see <see cref="Initiative.NpcInitiativeService"/>). The provider is asked for an
+    /// opening line through the same provider → validator → apply pipeline as
+    /// <see cref="Exchange"/>, and the exchange is recorded as <c>dialogue.exchanged</c>
+    /// with <c>initiative=true</c> and the motive in its data.
+    /// <para/>
+    /// The threat pipeline is deliberately NOT run here: the motive already encodes the
+    /// NPC's intent (e.g. ThreatenBack is roleplay directed by motive), and a
+    /// <c>dialogue.threat</c> event describes a threat made by the player, not an NPC's
+    /// scripted opening.
+    /// </summary>
+    public DialogueResult OpeningLine(string npcId, string playerId, NpcInitiative initiative)
+    {
+        if (initiative is null) throw new ArgumentNullException(nameof(initiative));
+        if (npcId == playerId)
+            throw new ArgumentException("A character cannot hold a dialogue with itself.");
+        if (initiative.NpcId != npcId)
+            throw new ArgumentException("Initiative does not belong to this NPC.", nameof(initiative));
+
+        var conversationId = $"{npcId}>{playerId}:initiative";
+        var stageDirection =
+            $"[You decide to approach {_context.DisplayNameOf(playerId)} and speak first. " +
+            $"Your motive: {MotiveLabel(initiative.Motive)}. {initiative.MotiveDetails} " +
+            "Say your opening line now — one or two sentences, in character.]";
+        var extraData = new Dictionary<string, string>
+        {
+            ["initiative"] = "true",
+            ["motive"] = initiative.Motive.ToString(),
+        };
+        return RunConversation(npcId, playerId, stageDirection, conversationId,
+            causedBy: null, ThreatLevel.None, extraData);
+    }
+
+    private static string MotiveLabel(NpcMotive motive) => motive switch
+    {
+        NpcMotive.Warn => "warn them about a danger you know of",
+        NpcMotive.Plead => "plead with them for mercy",
+        NpcMotive.ThreatenBack => "threaten them back for threatening you",
+        NpcMotive.ShareRumor => "share a rumor you heard",
+        NpcMotive.Confront => "confront them about your suspicions",
+        _ => "speak with them",
+    };
+
+    /// <summary>
+    /// The shared provider → validator → apply pipeline behind <see cref="Exchange"/> and
+    /// <see cref="OpeningLine"/>. Every exchange — accepted or fallback — is stored as a
+    /// world event, both participants perceive it through the Phase 4 gate, and accepted
+    /// output moves trust/suspicion and adds heard facts as evidence.
+    /// </summary>
+    private DialogueResult RunConversation(
+        string speakerId, string listenerId, string cleanUtterance, string conversationId,
+        long? causedBy, ThreatLevel threat, IReadOnlyDictionary<string, string>? extraData)
+    {
         _exchangesPerConversation.TryGetValue(conversationId, out var used);
         var budgetLeft = AIRules.MaxExchangesPerConversation - used;
 
@@ -117,9 +195,6 @@ public sealed class DialogueOrchestrator
         }
         else
         {
-            var cleanUtterance = utterance.Length > AIRules.MaxUtteranceLength
-                ? utterance.Substring(0, AIRules.MaxUtteranceLength)
-                : utterance;
             var request = new AIRequest
             {
                 SpeakerId = speakerId,
@@ -128,7 +203,7 @@ public sealed class DialogueOrchestrator
                 ListenerName = _context.DisplayNameOf(listenerId),
                 ConversationId = conversationId,
                 Utterance = cleanUtterance,
-                ContextPrompt = _context.BuildPrompt(speakerId, listenerId, cleanUtterance, _difficulty, _clock()),
+                ContextPrompt = _context.BuildPrompt(speakerId, listenerId, cleanUtterance, _difficulty, _clock(), threat),
                 Difficulty = _difficulty,
                 BudgetLeft = budgetLeft,
             };
@@ -160,17 +235,20 @@ public sealed class DialogueOrchestrator
         }
 
         // Stored as a world event either way: the sim never re-calls the provider on load.
+        var data = new Dictionary<string, string>
+        {
+            ["utterance"] = cleanUtterance,
+            ["reply"] = replyText,
+            ["fallback"] = fallbackReason is null ? "false" : "true",
+        };
+        if (extraData is not null)
+            foreach (var kv in extraData)
+                data[kv.Key] = kv.Value;
+
         var exchange = _events.Record(WorldEventTypes.DialogueExchanged,
             locationId: _currentLocationOf(speakerId),
             participants: new[] { speakerId, listenerId },
-            data: new Dictionary<string, string>
-            {
-                ["utterance"] = utterance.Length > AIRules.MaxUtteranceLength
-                    ? utterance.Substring(0, AIRules.MaxUtteranceLength)
-                    : utterance,
-                ["reply"] = replyText,
-                ["fallback"] = fallbackReason is null ? "false" : "true",
-            },
+            data: data,
             causedBy: causedBy);
 
         // Both participants perceive the exchange through the Phase 4 knowledge gate.

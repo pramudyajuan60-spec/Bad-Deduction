@@ -234,9 +234,16 @@ public sealed class PoliceService
             && _state.Crime.Scenes.TryGetValue(c.SceneId, out var scene) && !scene.IsDiscovered
             && now - c.OccurredAt >= PoliceRules.UndiscoveredFatalAlertMinutes);
 
+        // Phase 13: recent severe disturbances (e.g. public death threats) count toward the
+        // ALERT rung only — two within a day step Calm → Alert, but threats alone never
+        // reach Manhunt (ADR-048: the ladder steps on facts, never jumps).
+        var recentDisturbances = _state.Police.Disturbances
+            .Count(d => now - d.Timestamp < PoliceRules.DisturbanceAlertWindowMinutes && d.Severity >= 2);
+        var disturbanceAlert = recentDisturbances >= PoliceRules.AlertDisturbanceCount;
+
         var current = ps.Alert;
         AlertLevel target = current;
-        if (open.Count == 0)
+        if (open.Count == 0 && !disturbanceAlert)
         {
             target = current switch
             {
@@ -254,7 +261,7 @@ public sealed class PoliceService
                 _ => AlertLevel.Manhunt,
             };
         }
-        else if (staleFatal || open.Count >= PoliceRules.AlertOpenCrimeCount)
+        else if (staleFatal || open.Count >= PoliceRules.AlertOpenCrimeCount || disturbanceAlert)
         {
             target = current switch
             {
@@ -275,6 +282,41 @@ public sealed class PoliceService
                 });
         }
         return ps.Alert;
+    }
+
+    // ------------------------------------------------------------------ disturbances
+
+    /// <summary>
+    /// Phase 13: files a disturbance report (e.g. a death threat made in public or in front
+    /// of an officer). Records <c>police.disturbance_reported</c>, appends the report, and
+    /// re-evaluates the alert ladder. Additive: with no disturbances on record, alert
+    /// behavior is exactly what it was.
+    /// </summary>
+    public WorldEvent ReportDisturbance(string subjectId, string locationId, int severity, long? causedBy)
+    {
+        RequireSubject(subjectId);
+        if (!_state.World.Locations.ContainsKey(locationId))
+            throw new ArgumentException($"Unknown location '{locationId}'.", nameof(locationId));
+
+        var logged = _events.Record(WorldEventTypes.PoliceDisturbance,
+            locationId: locationId,
+            participants: new[] { subjectId },
+            data: new Dictionary<string, string>
+            {
+                ["subject"] = subjectId,
+                ["location"] = locationId,
+                ["severity"] = severity.ToString(),
+            },
+            causedBy: causedBy);
+        _state.Police.Disturbances.Add(new DisturbanceReport
+        {
+            Timestamp = _state.TotalMinutes,
+            LocationId = locationId,
+            SubjectId = subjectId,
+            Severity = severity,
+        });
+        EvaluateAlert();
+        return logged;
     }
 
     // ------------------------------------------------------------------ officer case work

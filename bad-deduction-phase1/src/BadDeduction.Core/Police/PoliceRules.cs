@@ -9,6 +9,14 @@ public static class PoliceRules
     /// <summary>Minutes a fatal incident may lie undiscovered before the city goes to Alert.</summary>
     public const int UndiscoveredFatalAlertMinutes = 720;
 
+    /// <summary>
+    /// Phase 13: how long a disturbance report stays "recent" for the alert ladder (one day).
+    /// </summary>
+    public const int DisturbanceAlertWindowMinutes = 1440;
+
+    /// <summary>Recent severe disturbances that step the alert ladder toward Alert (never Manhunt).</summary>
+    public const int AlertDisturbanceCount = 2;
+
     /// <summary>Open (non-custody) crimes that trigger Alert.</summary>
     public const int AlertOpenCrimeCount = 2;
 

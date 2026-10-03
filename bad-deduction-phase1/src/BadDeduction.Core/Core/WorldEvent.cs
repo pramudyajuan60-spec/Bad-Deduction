@@ -49,6 +49,8 @@ public static class WorldEventTypes
     public const string RumorSpread = "cognition.rumor_spread";
     public const string BeliefChanged = "cognition.belief_changed";
     public const string DialogueExchanged = "dialogue.exchanged";
+    public const string DialogueThreat = "dialogue.threat";
+    public const string DialogueInitiative = "dialogue.initiative";
     public const string CrimeIncident = "crime.incident";
     public const string CrimeDiscovered = "crime.discovered";
     public const string EvidenceDiscovered = "crime.evidence_discovered";
@@ -62,6 +64,7 @@ public static class WorldEventTypes
     public const string PoliceAccessDenied = "police.access_denied";
     public const string PoliceDutyAssigned = "police.duty_assigned";
     public const string PoliceAlertChanged = "police.alert_changed";
+    public const string PoliceDisturbance = "police.disturbance_reported";
     public const string PoliceArrest = "police.arrest";
     public const string AgendaObjectiveCompleted = "agenda.objective_completed";
     public const string AgendaObjectiveFailed = "agenda.objective_failed";

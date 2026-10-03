@@ -294,6 +294,16 @@ public static class GameStateValidator
             if (cs.State == CaseState.Open && cs.SubjectId is not null)
                 errors.Add($"Police case '{crimeId}' is Open but names a subject.");
         }
+
+        foreach (var d in pol.Disturbances)
+        {
+            if (!state.World.Characters.ContainsKey(d.SubjectId))
+                errors.Add($"Police disturbance references unknown subject '{d.SubjectId}'.");
+            if (!state.World.Locations.ContainsKey(d.LocationId))
+                errors.Add($"Police disturbance references unknown location '{d.LocationId}'.");
+            if (d.Timestamp < 0 || d.Timestamp > state.TotalMinutes)
+                errors.Add("Police disturbance has a timestamp outside the run.");
+        }
         return errors;
     }
 

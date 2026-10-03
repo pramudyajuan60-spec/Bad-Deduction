@@ -4,6 +4,7 @@ using BadDeduction.Characters;
 using BadDeduction.Cognition;
 using BadDeduction.Content;
 using BadDeduction.Crime;
+using BadDeduction.Initiative;
 using BadDeduction.Investigation;
 using BadDeduction.Police;
 using BadDeduction.Social;
@@ -43,6 +44,19 @@ public sealed class GameSession
     /// and duty rosters.
     /// </summary>
     public PoliceService Police { get; }
+
+    /// <summary>
+    /// Phase 13: threats as game events (social fallout, witnesses, police disturbance
+    /// reports). Wired into <see cref="Dialogue"/>; also callable directly.
+    /// </summary>
+    public ThreatService Threat { get; }
+
+    /// <summary>
+    /// Phase 13: NPC-initiated dialogue. Call <see cref="Initiative.NpcInitiativeService.Evaluate"/>
+    /// to find out which NPCs want to talk to the player, then feed an accepted initiative
+    /// to <see cref="DialogueOrchestrator.OpeningLine"/>.
+    /// </summary>
+    public NpcInitiativeService Initiative { get; }
 
     /// <summary>
     /// Phase 10: the hidden-genius layer (Malvr / Lumiel) — seeded identities, hidden
@@ -90,6 +104,9 @@ public sealed class GameSession
         Investigate = new InvestigationService(state, Events, Cognition, Crime, Social, content);
         Police = new PoliceService(state, Events, Social, Investigate, Crime, Cognition, content);
         World.AccessCheck = Police.CanEnter;
+        Threat = new ThreatService(state, Events, Social, Cognition, Police,
+            locId => content.HasLocation(locId)
+                     && content.GetLocation(locId).Visibility == LocationVisibility.Public);
         Agenda = new HiddenAgendaService(state, Events, Cognition, Crime, Investigate, Social, content);
         Investigate.Deception = Agenda;
         Simulate = new WorldSimulation(state, Time, Events, World, Cognition, content);
@@ -97,6 +114,14 @@ public sealed class GameSession
         Simulate.DutyLocationFor = Police.DutyLocationFor;
         View = new PlayerView(state);
         Debug = new DebugAccess(state);
+        // Phase 13: old saves predate the initiative stream, so their InitiativeRng is
+        // all-zero (which DeterministicRandom rejects). Derive the same stream a fresh
+        // run would have gotten, so migrated saves behave deterministically.
+        state.Initiative ??= new NpcInitiativeState();
+        if (state.Initiative.InitiativeRng.IsZero)
+            state.Initiative.InitiativeRng =
+                DeterministicRandom.Derive(state.Meta.RunSeed, "npc.initiative").Snapshot();
+        Initiative = new NpcInitiativeService(state, Events, Social, Cognition, View);
         var context = new ContextEngine(
             View, Cognition, Social, Relationships, content, state.World.Profiles,
             id => state.World.Characters[id].CurrentLocationId);
@@ -109,7 +134,8 @@ public sealed class GameSession
             () => new GameTime(state.TotalMinutes),
             BuildForbiddenPhrases(state),
             state.Meta.Difficulty,
-            state.Meta.RunSeed);
+            state.Meta.RunSeed,
+            threatService: Threat);
         Rng = new DeterministicRandom(state.SimRng);
     }
 
@@ -156,6 +182,8 @@ public sealed class GameSession
         // The hidden-agenda layer gets its own stream too: role assignment, objective picks
         // and strategic draws (ADR-002).
         state.Agenda.AgendaRng = DeterministicRandom.Derive(runSeed, "agenda.roles").Snapshot();
+        // Phase 13: NPC-initiative draws get their own persisted stream for the same reason.
+        state.Initiative.InitiativeRng = DeterministicRandom.Derive(runSeed, "npc.initiative").Snapshot();
         foreach (var def in content.Locations)
             state.World.Locations[def.Id] = new LocationState { Id = def.Id };
 

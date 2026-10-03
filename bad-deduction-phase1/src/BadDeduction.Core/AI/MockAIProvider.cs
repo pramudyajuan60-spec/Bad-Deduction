@@ -29,6 +29,26 @@ public sealed class MockAIProvider : IAIProvider
         "We talked for a while, {L} and I.",
     };
 
+    /// <summary>
+    /// Phase 13: when the utterance is a threat, the mock answers from a dedicated template
+    /// pool instead of the generic one — a threatened NPC reacts to the threat rather than
+    /// changing the subject. Still fully deterministic (same hash), validator-safe (no role
+    /// words, only the known listener name), with a fixed trust −3 / suspicion +4 and
+    /// zero or one fact.
+    /// </summary>
+    private static readonly string[] ThreatReplyTemplates =
+    {
+        "W-wait. Take that back — I don't want trouble.",
+        "Threaten me again and I'll scream for the guard!",
+        "You don't frighten me. Say it again and we'll see.",
+        "Please. There's no need for threats — let's talk.",
+    };
+
+    private static readonly string[] ThreatFactTemplates =
+    {
+        "{L} threatened me.",
+    };
+
     private readonly ulong _seed;
 
     public MockAIProvider(ulong seed) => _seed = seed;
@@ -39,6 +59,9 @@ public sealed class MockAIProvider : IAIProvider
 
         var h = StableHash.Compute(_seed,
             request.SpeakerId, request.ListenerId, request.ConversationId, request.Utterance);
+
+        if (ThreatDetector.Detect(request.Utterance) != ThreatLevel.None)
+            return ThreatResponse(request, h);
 
         var reply = ReplyTemplates[h % (ulong)ReplyTemplates.Length]
             .Replace("{S}", request.SpeakerName, StringComparison.Ordinal)
@@ -64,6 +87,27 @@ public sealed class MockAIProvider : IAIProvider
             SuspicionDelta = suspicion,
             NewFacts = facts,
             NewMemorySummary = $"talked with {request.ListenerName}.",
+        });
+    }
+
+    private static AIResponse ThreatResponse(AIRequest request, ulong h)
+    {
+        var reply = ThreatReplyTemplates[h % (ulong)ThreatReplyTemplates.Length]
+            .Replace("{L}", request.ListenerName, StringComparison.Ordinal);
+
+        var factCount = (int)((h >> 32) % 2); // 0..1 facts
+        var facts = new List<string>();
+        for (var i = 0; i < factCount; i++)
+            facts.Add(ThreatFactTemplates[(h >> 40) % (ulong)ThreatFactTemplates.Length]
+                .Replace("{L}", request.ListenerName, StringComparison.Ordinal));
+
+        return AIResponse.Accept(new DialogueOutput
+        {
+            ReplyText = reply,
+            TrustDelta = -3,
+            SuspicionDelta = 4,
+            NewFacts = facts,
+            NewMemorySummary = $"{request.ListenerName} threatened me.",
         });
     }
 }

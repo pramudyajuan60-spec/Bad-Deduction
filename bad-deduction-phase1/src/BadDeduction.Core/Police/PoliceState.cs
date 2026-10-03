@@ -68,4 +68,20 @@ public sealed class PoliceState
 
     /// <summary>Minimal case lifecycle per crime id.</summary>
     public Dictionary<string, CaseStatus> Cases { get; set; } = new();
+
+    /// <summary>
+    /// Phase 13: disturbance reports (e.g. death threats made in public). Plain data;
+    /// appended only by <see cref="PoliceService.ReportDisturbance"/>. Two recent severe
+    /// reports can step the alert ladder to Alert — never to Manhunt (ADR-048).
+    /// </summary>
+    public List<DisturbanceReport> Disturbances { get; set; } = new();
+}
+
+/// <summary>Phase 13: one reported disturbance — who caused it, where, how severe, when.</summary>
+public sealed class DisturbanceReport
+{
+    public long Timestamp { get; set; }
+    public string LocationId { get; set; } = "";
+    public string SubjectId { get; set; } = "";
+    public int Severity { get; set; }
 }

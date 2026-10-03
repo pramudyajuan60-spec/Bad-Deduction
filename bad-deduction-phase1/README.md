@@ -11,7 +11,7 @@ that emerge from the simulation instead of a scripted solution.
 
 ## Status
 
-**Phases 1-12 complete — roadmap done.**
+**Phases 1-12 complete — roadmap done. Phase 13 (post-roadmap): 2D open world + smarter NPCs.**
 * Phase 1 (Foundation): deterministic RNG, game time, event bus + causal world-event log, versioned
   save/load with state hashing, location content, truth-vs-player-view separation.
 * Phase 2 (Characters): seeded cast generation (`session.Cast.Generate(new CastSpec())` → 17 civilians
@@ -85,8 +85,19 @@ that emerge from the simulation instead of a scripted solution.
   balance metrics over 200 seeds (98.5% solvable, 0 knowledge violations, Easy/Genius
   contradiction gap, ~29 s). Slice bible: [`docs/VERTICAL_SLICE.md`](docs/VERTICAL_SLICE.md).
   No save-format change.
+* Phase 13 (2D open world + smarter NPCs, post-roadmap): `godot/` gains a top-down
+  2D explorer (`World2DView.cs`) — one procedural scene per location, WASD movement,
+  camera follow, proximity dialogue (E to talk), NPC-initiated chats ("!" bubble →
+  `session.Initiative.Evaluate`/`TryAccept` → `session.Dialogue.OpeningLine`), timed
+  travel through exits, 1 s = 1 game minute while exploring; all panels remain
+  accessible. Core: deterministic EN/ID threat detection (`AI.ThreatDetector`),
+  threats as game events (`Social.ThreatService`: fear spikes, witness suspicion,
+  memories, police disturbance reports that can step the alert ladder Calm→Alert,
+  never Manhunt), strengthened dialogue prompts ("address what they just said FIRST
+  and DIRECTLY" + THREAT section), threat-aware mock replies. Controls:
+  [`godot/docs/2D_CONTROLS.md`](godot/docs/2D_CONTROLS.md). No save-format change.
 
-324 tests. Presentation layer: `godot/` (Godot 4.7 .NET project, 10 panels, playable
+350 tests. Presentation layer: `godot/` (Godot 4.7 .NET project, 2D explorer + 10 panels, playable
 Day 1–7 loop with the Mock provider — requires the Godot 4.7.2-stable .NET editor;
 see `godot/README.md`).
 
