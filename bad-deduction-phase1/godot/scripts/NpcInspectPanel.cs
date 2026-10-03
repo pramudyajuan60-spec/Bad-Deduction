@@ -4,9 +4,11 @@ using Godot;
 namespace BadDeduction.Godot;
 
 /// <summary>
-/// Panel 2 (NPC Inspection): dossier for the selected NPC — portrait placeholder,
+/// Panel 2 (NPC Inspection): dossier for the selected NPC — procedural avatar,
 /// public facts, relationship from the player's perspective, trust dials, last known
 /// activity (only when shared-location knowledge allows), statements they've made,
+/// observed routines (knowledge-gated: only blocks the player actually observed via
+/// <c>Manipulation.ObserveRoutines</c>, unlearned stretches render as "???"),
 /// and Talk / Interview / Interrogate actions.
 /// </summary>
 public partial class NpcInspectPanel : PanelContainer, IPanel
@@ -16,11 +18,14 @@ public partial class NpcInspectPanel : PanelContainer, IPanel
     private Label _relationLabel = null!;
     private Label _activityLabel = null!;
     private Label _infoLabel = null!;
-    private Label _portraitLetter = null!;
+    private Label _scheduleLabel = null!;
+    private Button _observeBtn = null!;
+    private NpcPortrait _portrait = null!;
     private TrustDialPanel _dials = null!;
     private Button _talkBtn = null!;
     private Button _interviewBtn = null!;
     private Button _interrogateBtn = null!;
+    private string _lastScheduleNpc = "";
 
     public override void _Ready()
     {
@@ -36,17 +41,15 @@ public partial class NpcInspectPanel : PanelContainer, IPanel
         cols.SizeFlagsVertical = SizeFlags.ExpandFill;
         root.AddChild(cols);
 
-        var portrait = new ColorRect
+        var portraitBox = new PanelContainer
         {
-            Color = UiTheme.PanelLight,
             CustomMinimumSize = new Vector2(150, 190),
         };
-        _portraitLetter = new Label { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        _portraitLetter.AddThemeFontSizeOverride("font_size", 72);
-        _portraitLetter.AddThemeColorOverride("font_color", UiTheme.GoldDim);
-        _portraitLetter.SetAnchorsPreset(LayoutPreset.FullRect);
-        portrait.AddChild(_portraitLetter);
-        cols.AddChild(portrait);
+        var portraitCenter = new CenterContainer();
+        _portrait = new NpcPortrait();
+        portraitCenter.AddChild(_portrait);
+        portraitBox.AddChild(portraitCenter);
+        cols.AddChild(portraitBox);
 
         var info = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         info.AddThemeConstantOverride("separation", 6);
@@ -63,6 +66,19 @@ public partial class NpcInspectPanel : PanelContainer, IPanel
         _infoLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
         _infoLabel.AddThemeColorOverride("font_color", UiTheme.Dim);
         info.AddChild(_infoLabel);
+        info.AddChild(UiTheme.GoldRule());
+        var schedHead = new HBoxContainer();
+        schedHead.AddThemeConstantOverride("separation", 10);
+        var schedTitle = UiTheme.HeaderLabel("Observed routines", 16);
+        schedTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        schedHead.AddChild(schedTitle);
+        _observeBtn = new Button { Text = "Observe" };
+        _observeBtn.Pressed += OnObservePressed;
+        schedHead.AddChild(_observeBtn);
+        info.AddChild(schedHead);
+        _scheduleLabel = new Label();
+        _scheduleLabel.AddThemeColorOverride("font_color", UiTheme.Dim);
+        info.AddChild(_scheduleLabel);
         cols.AddChild(info);
 
         var actions = new HBoxContainer();
@@ -89,6 +105,7 @@ public partial class NpcInspectPanel : PanelContainer, IPanel
         _talkBtn.Disabled = !has;
         _interviewBtn.Disabled = !has;
         _interrogateBtn.Disabled = !has;
+        _observeBtn.Disabled = !has;
         if (!has)
         {
             _nameLabel.Text = "No one selected";
@@ -96,14 +113,16 @@ public partial class NpcInspectPanel : PanelContainer, IPanel
             _relationLabel.Text = "";
             _activityLabel.Text = "";
             _infoLabel.Text = "";
-            _portraitLetter.Text = "?";
+            _scheduleLabel.Text = "";
+            _portrait.SetNpc("", "?");
+            _lastScheduleNpc = "";
             return;
         }
 
         var c = s.World.GetCharacter(id);
         var pub = s.View.PublicProfile(id)!;
         _nameLabel.Text = pub.DisplayName;
-        _portraitLetter.Text = pub.DisplayName.Substring(0, 1);
+        _portrait.SetNpc(id, pub.DisplayName);
         _factsLabel.Text = $"Age {pub.Age}  •  {pub.OccupationId}  •  {pub.Kind}";
 
         var rel = s.Social.View("c_player", id);
@@ -121,6 +140,58 @@ public partial class NpcInspectPanel : PanelContainer, IPanel
         foreach (var e in s.View.JournalEntries())
             if (e.Participants.Contains(id)) knownEvents++;
         _infoLabel.Text = $"Statements on record: {stmts.Count}\nEvents you've seen them in: {knownEvents}";
+
+        // UI-driven observation (like Initiative.Evaluate): learn the current block
+        // of every co-located NPC when the panel opens for a new NPC, or via the
+        // Observe button. Never on plain time-advance refreshes.
+        if (id != _lastScheduleNpc)
+        {
+            s.Manipulation.ObserveRoutines();
+            _lastScheduleNpc = id;
+        }
+        RenderSchedule(s, id);
+    }
+
+    /// <summary>
+    /// Renders today's learned schedule. Only observed blocks are listed —
+    /// anything unobserved renders as "???". Never shows the true schedule.
+    /// </summary>
+    private void RenderSchedule(GameSession s, string npcId)
+    {
+        var blocks = s.Manipulation.GetLearnedSchedule(npcId);
+        if (blocks.Count == 0)
+        {
+            _scheduleLabel.Text = "No routines observed yet.\nOpen this panel while sharing their location — or press Observe.";
+            return;
+        }
+        var sb = new System.Text.StringBuilder();
+        int prevEnd = -1;
+        foreach (var b in blocks)
+        {
+            if (prevEnd >= 0 && b.StartMinute > prevEnd)
+                sb.AppendLine("??:??–??:??  •  ??? (unobserved)");
+            var locName = s.Content.GetLocation(b.LocationId).Name;
+            sb.AppendLine($"{FmtClock(b.StartMinute)}–{FmtClock(b.EndMinute)}  •  {locName} ({b.Source})");
+            prevEnd = b.EndMinute;
+        }
+        _scheduleLabel.Text = sb.ToString().TrimEnd();
+    }
+
+    private static string FmtClock(int minuteOfDay)
+    {
+        var t = new GameTime(minuteOfDay);
+        return $"{t.Hour:00}:{t.Minute:00}";
+    }
+
+    private void OnObservePressed()
+    {
+        var g = GameController.Instance;
+        if (!g.HasRun) return;
+        var s = g.Session!;
+        var id = g.SelectedNpcId;
+        if (id == "" || !s.State.World.Characters.ContainsKey(id)) return;
+        s.Manipulation.ObserveRoutines();
+        RenderSchedule(s, id);
     }
 
     private void DoInterview(bool pressured)

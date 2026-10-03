@@ -54,6 +54,44 @@ gold accents): floor rect, deterministic decor shapes (seeded `2d.{locationId}`
 stream — same seed, same grounds, every run), location banner, gold exit rings,
 blue discs for civilians, steel-grey for police, gold-ringed disc for you.
 
+## Phase 14 presentation: trust bars, dialogue profiles, observed routines
+
+### Trust bars (2D map)
+
+Every NPC on the 2D map carries a small trust bar + number under their name tag:
+the NPC's **trust toward you** (`Social.View(npcId, "c_player")`), the same meter
+dialogue moves. Bars refresh on a 0.5 s timer (never per rendered frame) and on
+location rebuilds. Colors: green ≥ 60, gold ≥ 30, red below.
+
+### Dialogue panel (two columns)
+
+Opening a conversation (key 8, or `E` near an NPC) shows a two-column layout:
+
+- **LEFT — NPC profile box:** procedural deterministic avatar (see ADR-096),
+  name, occupation, trust bar (them → you), manipulability tier
+  (◈ Gullible / ● Standard / ▲ Wary, color-coded), and the despair meter
+  (subtle dark-red bar, 0–100; "at 100 they break").
+- **RIGHT — conversation:** the NPC's band line, the response log, delta chips,
+  and the free-text input. New Phase 14 chips: **order outcome**
+  (`Order accepted: GoTo` / `Order refused: Attack`) and **despair delta**
+  when an exchange moved the meter. The existing `(deflected)` and
+  `(offline dialogue)` chips keep their behavior.
+
+### Observed routines (NPC Inspect panel)
+
+The Inspect panel (key 2) has an **Observed routines** section under "Known
+information". It lists today's learned schedule blocks from
+`Manipulation.GetLearnedSchedule(npcId)`, rendered like
+`22:00–23:00  •  Market square (seen)`. Only blocks you actually observed are
+listed — anything unobserved renders as `??:??–??:??  •  ??? (unobserved)`,
+and the panel never shows the NPC's true schedule.
+
+How observation works: `Manipulation.ObserveRoutines()` learns the current
+schedule block of every living NPC sharing your location. It runs at two
+well-defined moments — when the Inspect panel opens for a new NPC, and when you
+press the **Observe** button in the section. Never every frame, never on plain
+time-advance refreshes.
+
 ## Limitations
 
 - No collision with decor (walk-through programmer art), no pathfinding, no

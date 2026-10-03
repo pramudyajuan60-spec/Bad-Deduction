@@ -1080,3 +1080,141 @@ facts/memories).
 
 *Consequences.* Mock-driven runs stay replay-identical and validator-clean, and a
 threat now visibly lands even with no LLM configured.
+
+## ADR-090 — Compliance is not mind control (the "jangan semua" rule)
+
+*Context.* The user explicitly ruled: even at maximum NPC trust, the player must
+not be able to make an NPC do anything they say ("jangan semua yang di katakan
+player, meskipun trust npc tinggi, tapi player tidak bisa sembarangan melakukan
+apapun yang di suruh user"). Trust shifts the weights, never to 100%.
+
+*Decision.* Order compliance (`ManipulationService.EvaluateOrder`) scores
+trust + fear + tier + order severity + morality/self-preservation, but severe
+orders are structurally refused: the existing `ComplianceEvaluator` (Phase 3)
+caps the trust pull at 98 against a push of 123 for a severe order, and the
+Phase 14 tier bonus (+15 max) is deliberately too small to close that gap. A
+pinned test asserts murder is refused even with all 8 axes maxed toward the
+player. Accepted orders are deterministic via the named `manipulation` RNG
+stream; refusals go through the provider→validator pipeline with refusal
+context, cost −2 trust, and +2 suspicion.
+
+*Consequences.* High trust buys obedience for benign orders (Wait, Follow,
+GoTo), never for murder or suicide-adjacent commands. The rule is mechanical,
+not prompt-wishing, so it holds for the mock, Ollama, and any future provider.
+
+## ADR-091 — Trust starts at exactly 20 toward the player
+
+*Context.* Before Phase 14, first-impression trust came from personality
+nudges (cold/warm ±, typically landing 15–25) — opaque and uneven. The user
+wants a legible trust meter: every NPC starts at 20 toward the player.
+
+*Decision.* `SocialRules.PlayerStartingTrust = 20`. `SocialService.View`'s
+stranger branch and `Adjust`'s edge-creation hook pin player-involved pairs to
+exactly 20 (no personality nudge); NPC↔NPC baselines are untouched
+(kind-based: stranger 20, acquaintance 20, friend 60…). `SeedPoliceTrust(90)`
+still works (20 + 70 delta). Documented before/after: 15–25 w/ nudge →
+exactly 20.
+
+*Consequences.* The trust meter has a known floor; all trust movement is
+earned through play. Old tests asserting nudged stranger values were the only
+blast radius (none — no test pinned the old values).
+
+## ADR-092 — Manipulability tiers are a pure function of (seed, npcId)
+
+*Context.* The user wants NPC responses to scale with a per-NPC manipulability
+tier (Gullible / Standard / Wary): compliance difficulty, trust-shift
+magnitude from dialogue, despair resistance.
+
+*Decision.* `ManipulabilityRules.TierFor(runSeed, npcId)` is a pure function
+(StableHash, weights 25/50/25) — no RNG stream consumed, no stored state, no
+migration. Effects: compliance bonus +15/0/−20, trust-shift scale ×1.5/×1/×0.5
+(integer-rounded), despair scale ×2/×1/×0.5. Constants live in
+`Social/Manipulability.cs` with rationale comments.
+
+*Consequences.* Tiers are replay-identical and free to query from UI
+(`session.Manipulation.TierOf`). Gullible NPCs are genuinely easier marks;
+Wary ones resist — but per ADR-090, no tier makes a severe order comply.
+
+## ADR-093 — The suicide (despair) meter
+
+*Context.* Sustained psychological pressure should be able to break an NPC —
+the dark mirror of the trust meter, and fuel for the Malvr fantasy.
+
+*Decision.* Per-NPC integer meter 0–100, starts 0, stored in
+`GameState.Manipulation`. Rises ONLY through a new structured provider field
+`despair_delta`, clamped by the validator to ±15 (`AIRules.MaxDespairDelta`),
+scaled by tier and neuroticism. Nothing else moves it — no passive drift, no
+random shocks. At 100 the NPC commits suicide: `manipulation.suicide`
+WorldEvent (causally linked), witnesses perceive through the Phase 4 gate,
+police get a severity-3 disturbance (ReportDisturbance requires a living
+subject, so the report is filed before death is marked). Full death-scene
+investigation is Phase 15+.
+
+*Consequences.* Breaking someone takes many deliberate exchanges (≥7 maxed
+hits even on a Gullible NPC), all of it visible in the event log. The validator
+stays in the loop for suicide-adjacent lines like everything else.
+
+## ADR-094 — Observable routines are knowledge-gated, and orders are a modest taxonomy
+
+*Context.* Two Phase 14 needs: (a) Hitman-style planning requires learning NPC
+schedules by watching, never for free; (b) free-text orders need a deterministic
+intent parser for EN+ID input.
+
+*Decision.* (a) `ManipulationService.ObserveRoutines` (UI-driven, like
+`NpcInitiativeService.Evaluate`) learns the current schedule block of
+co-located NPCs only; `GetLearnedSchedule` exposes learned blocks, unlearned
+stretches render as "???". The true schedule is never exposed. (b)
+`AI.OrderDetector` is a deterministic keyword classifier mirroring
+`ThreatDetector` (lowercase, word boundaries, EN+ID phrases): GoTo (the lure —
+extracts location + time: "midnight"→next 00:00, "tonight"→21:00,
+"jam N"/"at N"→N:00, default +120 min), Buy, Steal, Lie, Attack, Follow, Wait.
+Severity order Attack→Steal→Lie→Buy→GoTo→Follow→Wait; second-person violence
+("kill you", "kubunuh") is NOT an order — the threat pipeline owns it. Risk /
+moral-cost table lives in `Social/ComplianceRules.cs`.
+
+*Consequences.* The parser is deliberately dumb (sarcasm/negation/novel
+phrasings missed — documented); the taxonomy is extensible by adding phrases.
+Accepted GoTo orders create real timed travel through the sim's travel
+machinery (witnessed, cordon-checked); other accepted orders log
+`order.executed` events — mechanical follow-through (theft resolution, combat)
+is Phase 15+.
+
+## ADR-095 — Strategic movement goes through the normal travel seam
+
+*Context.* The Malvr/Lumiel opponent (Phase 10 strategic AI) must act visibly
+on the 2D map without rebuilding the strategic AI.
+
+*Decision.* `WorldSimulation` gains two optional destination delegates:
+`CommandedDestinationFor` (player lures, win on conflict) and
+`StrategicDestinationFor` (genius AI staging). Both feed the existing travel
+machinery — departures/arrivals, witnesses, cordons all apply.
+`HiddenAgendaService.StrategicDestinationFor`: Malvr lurks near their
+elimination target's location at night (22:00–04:00); Lumiel travels to a
+pursued crime scene. Director-level staging only — no knowledge is granted to
+either side by the movement itself.
+
+*Consequences.* Enemy agency is visible (an NPC walking across the map at
+night means something) while the strategic AI itself is untouched. The seam is
+reusable for future director behaviors.
+
+## ADR-096 — Procedural deterministic avatars (portraits pipeline deferred)
+
+*Context.* The Phase 14 dialogue profile box needs a face per NPC, but the real
+portraits pipeline (generated/commissioned art) is deferred. A text initial alone
+carries no identity; a random face per session would break the "same NPC, same
+face" expectation players have of a portrait.
+
+*Decision.* `godot/scripts/NpcPortrait.cs` draws a symmetric geometric face in
+code: hash-tinted halo ring, head disc, two eyes, smile-or-flat mouth (lowest
+hash bit), plus the NPC's initials. Identity comes from a tiny FNV-1a hash over
+the NPC id string — FNV-1a over UTF-16 code units is stable across runs and
+platforms by spec, unlike `string.GetHashCode()`, which the script must never
+use for anything the player sees persist. Hue is drawn from the hash; the same
+id renders the same face everywhere (dialogue profile, inspect panel) on every
+run. No assets, no NuGet, no sim reads — pure presentation of an id string.
+
+*Consequences.* Placeholder faces are cheap and deterministic, so the deferred
+portraits pipeline can swap them out later without touching any panel logic: the
+avatar is a single control keyed by (npcId, displayName). The faces are
+deliberately abstract (1897 dark-fantasy skin-agnostic); variety comes from hue
+and mouth, not features — fine for a stand-in, not a final portrait.

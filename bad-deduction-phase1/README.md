@@ -11,7 +11,7 @@ that emerge from the simulation instead of a scripted solution.
 
 ## Status
 
-**Phases 1-12 complete — roadmap done. Phase 13 (post-roadmap): 2D open world + smarter NPCs.**
+**Phases 1-12 complete — roadmap done. Phase 13 (post-roadmap): 2D open world + smarter NPCs. Phase 14: manipulation & compliance (trust meters, orders with refusal, suicide meter, observable routines).**
 * Phase 1 (Foundation): deterministic RNG, game time, event bus + causal world-event log, versioned
   save/load with state hashing, location content, truth-vs-player-view separation.
 * Phase 2 (Characters): seeded cast generation (`session.Cast.Generate(new CastSpec())` → 17 civilians
@@ -96,8 +96,25 @@ that emerge from the simulation instead of a scripted solution.
   never Manhunt), strengthened dialogue prompts ("address what they just said FIRST
   and DIRECTLY" + THREAT section), threat-aware mock replies. Controls:
   [`godot/docs/2D_CONTROLS.md`](godot/docs/2D_CONTROLS.md). No save-format change.
+* Phase 14 (manipulation & compliance, post-roadmap): `src/BadDeduction.Core/Manipulation/`
+  — trust starts at exactly 20 toward the player (was personality-nudged 15–25);
+  per-NPC manipulability tiers (Gullible/Standard/Wary, pure function of seed+id)
+  scaling compliance, trust shifts, and despair resistance; free-text orders through
+  dialogue (`AI.OrderDetector`: EN+ID GoTo/Buy/Steal/Lie/Attack/Follow/Wait) with
+  compliance scoring where trust shifts weights but NEVER to 100% — severe orders
+  (murder) are refused even at max trust (ADR-090); accepted GoTo lures create real
+  timed travel visible on the 2D map; refusals cost trust and raise suspicion;
+  per-NPC despair meter 0–100 (validator-clamped `despair_delta`, tier-scaled) with
+  suicide at 100 → causally-logged event + police disturbance; observable routines
+  (schedule entries learned only by co-located observation, "???" otherwise);
+  enemy agency surfaced via travel seams (`CommandedDestinationFor` /
+  `StrategicDestinationFor`: Malvr lurks near elimination targets at night, Lumiel
+  travels to pursued crime scenes). Godot: reworked `DialoguePanel` (profile box
+  with procedural deterministic avatar, trust/tier/despair meters + text box),
+  trust bars above NPC heads, schedule tab in `NpcInspectPanel`. No save-format
+  change (property-initializer state defaults, Phase-13 pattern).
 
-350 tests. Presentation layer: `godot/` (Godot 4.7 .NET project, 2D explorer + 10 panels, playable
+375 tests. Presentation layer: `godot/` (Godot 4.7 .NET project, 2D explorer + 10 panels, playable
 Day 1–7 loop with the Mock provider — requires the Godot 4.7.2-stable .NET editor;
 see `godot/README.md`).
 
@@ -105,7 +122,7 @@ see `godot/README.md`).
 
 ```
 src/BadDeduction.Core/     engine-free simulation library (net8.0)
-  Core/  World/  Characters/  Social/  Cognition/  Content/  AI/  Crime/  Investigation/  Police/  Agenda/
+  Core/  World/  Characters/  Social/  Cognition/  Content/  AI/  Crime/  Investigation/  Police/  Agenda/  Manipulation/
 tests/BadDeduction.Tests/  dependency-free test runner
 data/                      data-driven content (locations, occupations, goals, character secrets, names, crimes)
 docs/                      audit, roadmap, decisions

@@ -49,6 +49,7 @@ public partial class World2DView : PanelContainer, IPanel
     private bool _eLatch;
     private string? _nearestNpcId;
     private ulong _noticeUntilMsec;
+    private double _trustAccum;
 
     /// <summary>Test hook: how many NPC actor nodes are currently placed.</summary>
     public int NpcNodeCount => _npcNodes.Count;
@@ -293,12 +294,23 @@ public partial class World2DView : PanelContainer, IPanel
                 Body = c.Kind == CharacterKind.Police ? PoliceColor : UiTheme.Blue,
                 Ring = UiTheme.Dim,
                 ActorName = c.DisplayName,
+                ShowTrustBar = true,
             };
             var (basePos, _, _) = NpcVisualParams(_runSeed, _locationId, id);
             node.Position = basePos;
             _worldRoot.AddChild(node);
+            node.SetTrust(s.Social.View(id, "c_player").Trust);
             _npcNodes[id] = node;
         }
+    }
+
+    /// <summary>Refreshes every NPC node's trust bar from the NPC's trust toward
+    /// the player. Called on rebuild and on a 0.5 s timer — never per frame.</summary>
+    private void RefreshTrustBars()
+    {
+        var s = GameController.Instance.Session!;
+        foreach (var (id, node) in _npcNodes)
+            node.SetTrust(s.Social.View(id, "c_player").Trust);
     }
 
     private List<string> LiveNpcIds()
@@ -345,6 +357,7 @@ public partial class World2DView : PanelContainer, IPanel
         CheckExits();
         TickClock(delta);
         UpdateNotice();
+        UpdateTrustBars(delta);
 
         _camera.Position = _playerPos; // smoothing glides the follow
     }
@@ -486,6 +499,16 @@ public partial class World2DView : PanelContainer, IPanel
             _notice.Visible = false;
     }
 
+    /// <summary>Trust bars track live trust without per-frame cost.</summary>
+    private void UpdateTrustBars(double delta)
+    {
+        _trustAccum += delta;
+        if (_trustAccum < 0.5) return;
+        _trustAccum = 0;
+        if (_npcNodes.Count > 0)
+            RefreshTrustBars();
+    }
+
     private void Flash()
     {
         _flash.Modulate = new Color(1, 1, 1, 0.55f);
@@ -539,19 +562,39 @@ public partial class World2DView : PanelContainer, IPanel
         }
     }
 
-    /// <summary>One actor on the map: colored disc + ring, name tag, and a hidden
-    /// gold "!" shown when the NPC has a pending initiative.</summary>
+    /// <summary>One actor on the map: colored disc + ring, name tag, a hidden
+    /// gold "!" shown when the NPC has a pending initiative, and (NPCs only) a
+    /// small trust bar + number under the name tag showing the NPC's trust
+    /// toward the player. Trust is refreshed on a 0.5 s timer, not per frame.</summary>
     private sealed partial class ActorNode : Node2D
     {
         public Color Body = UiTheme.Blue;
         public Color Ring = UiTheme.Gold;
         public string ActorName = "";
         private Label _alert = null!;
+        private Label _trustLabel = null!;
+        private int _trust = -1;
+
+        /// <summary>True for NPC nodes; the player node has no trust bar.</summary>
+        public bool ShowTrustBar { get; set; }
 
         public bool AlertVisible
         {
             get => _alert.Visible;
             set => _alert.Visible = value;
+        }
+
+        /// <summary>NPC's trust toward the player (0-100). Redraws the bar.</summary>
+        public void SetTrust(int trust)
+        {
+            if (_trust == trust) return;
+            _trust = trust;
+            if (_trustLabel is not null)
+            {
+                _trustLabel.Text = trust.ToString();
+                _trustLabel.Visible = ShowTrustBar;
+            }
+            QueueRedraw();
         }
 
         public override void _Ready()
@@ -567,6 +610,19 @@ public partial class World2DView : PanelContainer, IPanel
             name.AddThemeColorOverride("font_color", UiTheme.Text);
             name.AddThemeFontSizeOverride("font_size", 14);
             AddChild(name);
+
+            _trustLabel = new Label
+            {
+                Text = _trust >= 0 ? _trust.ToString() : "",
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Position = new Vector2(-22, 52),
+                Size = new Vector2(44, 16),
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+                Visible = ShowTrustBar,
+            };
+            _trustLabel.AddThemeColorOverride("font_color", UiTheme.Dim);
+            _trustLabel.AddThemeFontSizeOverride("font_size", 11);
+            AddChild(_trustLabel);
 
             _alert = new Label
             {
@@ -586,6 +642,13 @@ public partial class World2DView : PanelContainer, IPanel
         {
             DrawCircle(Vector2.Zero, 18, Body);
             DrawArc(Vector2.Zero, 18, 0, Mathf.Tau, 32, Ring, 3f);
+            if (ShowTrustBar && _trust >= 0)
+            {
+                var bar = new Rect2(-22, 44, 44, 6);
+                DrawRect(bar, new Color(0, 0, 0, 0.55f));
+                var col = _trust >= 60 ? UiTheme.Green : _trust >= 30 ? UiTheme.Gold : UiTheme.Red;
+                DrawRect(new Rect2(bar.Position, new Vector2(bar.Size.X * _trust / 100f, bar.Size.Y)), col);
+            }
         }
     }
 }
