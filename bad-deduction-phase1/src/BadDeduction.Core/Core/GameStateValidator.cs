@@ -42,6 +42,7 @@ public static class GameStateValidator
         errors.AddRange(ValidateInvestigation(state));
         errors.AddRange(ValidatePolice(state));
         errors.AddRange(ValidateAgenda(state));
+        errors.AddRange(ValidateManipulation(state));
 
         // Event log
         var log = state.EventLog;
@@ -346,6 +347,41 @@ public static class GameStateValidator
                 errors.Add($"Agenda.IncidentAttribution references unknown crime '{crimeId}'.");
             if (!state.World.Characters.ContainsKey(holderId))
                 errors.Add($"Agenda.IncidentAttribution for '{crimeId}' references unknown character '{holderId}'.");
+        }
+        return errors;
+    }
+
+    private static IEnumerable<string> ValidateManipulation(GameState state)
+    {
+        var errors = new List<string>();
+        var m = state.Manipulation;
+        foreach (var (id, despair) in m.Despair)
+        {
+            if (!state.World.Characters.ContainsKey(id))
+                errors.Add($"Manipulation.Despair references unknown character '{id}'.");
+            if (despair < 0 || despair > 100)
+                errors.Add($"Manipulation.Despair for '{id}' is outside 0-100.");
+        }
+        foreach (var (id, cmd) in m.CommandedDestinations)
+        {
+            if (!state.World.Characters.ContainsKey(id))
+                errors.Add($"Manipulation.CommandedDestinations references unknown character '{id}'.");
+            if (!state.World.Locations.ContainsKey(cmd.LocationId))
+                errors.Add($"Manipulation.CommandedDestinations for '{id}' references unknown location '{cmd.LocationId}'.");
+            if (cmd.UntilMinute < 0)
+                errors.Add($"Manipulation.CommandedDestinations for '{id}' has a negative expiry.");
+        }
+        foreach (var (id, blocks) in m.ObservedSchedules)
+        {
+            if (!state.World.Characters.ContainsKey(id))
+                errors.Add($"Manipulation.ObservedSchedules references unknown character '{id}'.");
+            foreach (var b in blocks)
+            {
+                if (!state.World.Locations.ContainsKey(b.LocationId))
+                    errors.Add($"Manipulation.ObservedSchedules for '{id}' references unknown location '{b.LocationId}'.");
+                if (b.StartMinute < 0 || b.EndMinute <= b.StartMinute || b.EndMinute > 1440)
+                    errors.Add($"Manipulation.ObservedSchedules for '{id}' has an invalid block.");
+            }
         }
         return errors;
     }

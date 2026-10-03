@@ -116,13 +116,16 @@ public sealed class DialogueValidator
         // Clamp deltas (never reject for overflow).
         var trust = ClampDelta(output.TrustDelta);
         var suspicion = ClampDelta(output.SuspicionDelta);
-        var clamped = trust != output.TrustDelta || suspicion != output.SuspicionDelta;
+        var despair = Math.Clamp(output.DespairDelta, -AIRules.MaxDespairDelta, AIRules.MaxDespairDelta);
+        var clamped = trust != output.TrustDelta || suspicion != output.SuspicionDelta
+            || despair != output.DespairDelta;
 
         return ValidationResult.Accept(new DialogueOutput
         {
             ReplyText = output.ReplyText,
             TrustDelta = trust,
             SuspicionDelta = suspicion,
+            DespairDelta = despair,
             NewFacts = facts,
             NewMemorySummary = output.NewMemorySummary,
             RelationshipNote = output.RelationshipNote,

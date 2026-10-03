@@ -1,6 +1,8 @@
 using BadDeduction.Cognition;
+using BadDeduction.Content;
 using BadDeduction.Core;
 using BadDeduction.Initiative;
+using BadDeduction.Manipulation;
 using BadDeduction.Social;
 
 namespace BadDeduction.AI;
@@ -19,6 +21,16 @@ public sealed class DialogueResult
     public int SuspicionDelta { get; set; }
     /// <summary>True when the provider fell back internally (e.g. Ollama unreachable → mock). Drives the UI's "offline dialogue" indicator.</summary>
     public bool UsedFallback { get; set; }
+    /// <summary>
+    /// Phase 14: despair proposed by the accepted output, tier-scaled and applied.
+    /// Zero when no provider output was applied.
+    /// </summary>
+    public int DespairDelta { get; set; }
+    /// <summary>
+    /// Phase 14: the compliance outcome for a detected player order, e.g.
+    /// "accepted:GoTo" / "refused:Attack". Null when no order was detected.
+    /// </summary>
+    public string? OrderOutcome { get; set; }
 }
 
 /// <summary>
@@ -62,6 +74,8 @@ public sealed class DialogueOrchestrator
     private readonly Difficulty _difficulty;
     private readonly ulong _seed;
     private readonly ThreatService? _threatService;
+    private readonly ManipulationService? _manipulation;
+    private readonly ContentDatabase? _content;
     private readonly Dictionary<string, int> _exchangesPerConversation = new();
 
     public DialogueOrchestrator(
@@ -76,7 +90,9 @@ public sealed class DialogueOrchestrator
         IReadOnlyList<string> forbiddenPhrases,
         Difficulty difficulty,
         ulong seed,
-        ThreatService? threatService = null)
+        ThreatService? threatService = null,
+        ManipulationService? manipulationService = null,
+        ContentDatabase? content = null)
     {
         _context = context;
         _provider = provider;
@@ -90,6 +106,8 @@ public sealed class DialogueOrchestrator
         _difficulty = difficulty;
         _seed = seed;
         _threatService = threatService;
+        _manipulation = manipulationService;
+        _content = content;
     }
 
     /// <summary>
@@ -100,6 +118,14 @@ public sealed class DialogueOrchestrator
     /// steers the prompt (THREAT section) and, when a <see cref="ThreatService"/> is wired,
     /// the threat is applied as a game event afterwards. The listener — the one who spoke —
     /// is the threatener; the speaker (NPC) is the target.
+    /// <para/>
+    /// Phase 14: the utterance is also classified by <see cref="OrderDetector"/>. A
+    /// detected order is scored by <see cref="ManipulationService.EvaluateOrder"/>
+    /// BEFORE the provider is consulted (the decision is pure and deterministic); the
+    /// verdict steers the prompt (ORDER section) and is executed afterwards —
+    /// accepted orders through <c>ExecuteOrder</c>, refused ones through
+    /// <c>RefuseOrder</c>. Orders are only evaluated when the manipulation service
+    /// and content are wired (GameSession always wires them; bare test setups may not).
     /// </summary>
     public DialogueResult Exchange(
         string speakerId, string listenerId, string utterance,
@@ -116,12 +142,41 @@ public sealed class DialogueOrchestrator
             : utterance;
         var threat = ThreatDetector.Detect(cleanUtterance);
 
+        // Phase 14: order detection + pre-made compliance verdict.
+        var order = OrderDetector.Detect(cleanUtterance, ResolveLocationName, _clock().TotalMinutes);
+        ComplianceDecision? decision = null;
+        OrderPromptContext? orderCtx = null;
+        string? orderDirective = null;
+        if (order.Kind != OrderKind.None && _manipulation is not null && _content is not null)
+        {
+            decision = _manipulation.EvaluateOrder(speakerId, listenerId, order);
+            var decisive = decision.Decisive;
+            orderCtx = new OrderPromptContext
+            {
+                Description = ComplianceRules.LabelOf(order),
+                Complied = decision.Complies,
+                DecisiveFactor = decisive is null
+                    ? "no strong feelings either way"
+                    : $"{decisive.Name} {decisive.Value:+0;-0}",
+            };
+            orderDirective = (decision.Complies ? "accept:" : "refuse:") + order.Kind;
+        }
+
         var result = RunConversation(speakerId, listenerId, cleanUtterance, conversationId,
-            causedBy, threat, extraData: null);
+            causedBy, threat, orderCtx, orderDirective, extraData: null);
 
         if (threat != ThreatLevel.None && _threatService is not null)
             _threatService.HandleThreat(listenerId, speakerId, threat,
                 _currentLocationOf(speakerId), result.ExchangeEventId);
+
+        if (decision is not null && _manipulation is not null)
+        {
+            result.OrderOutcome = (decision.Complies ? "accepted:" : "refused:") + order.Kind;
+            if (decision.Complies)
+                _manipulation.ExecuteOrder(speakerId, listenerId, order, decision, result.ExchangeEventId);
+            else
+                _manipulation.RefuseOrder(speakerId, listenerId, order, decision, result.ExchangeEventId);
+        }
 
         return result;
     }
@@ -157,7 +212,7 @@ public sealed class DialogueOrchestrator
             ["motive"] = initiative.Motive.ToString(),
         };
         return RunConversation(npcId, playerId, stageDirection, conversationId,
-            causedBy: null, ThreatLevel.None, extraData);
+            causedBy: null, ThreatLevel.None, orderCtx: null, orderDirective: null, extraData);
     }
 
     private static string MotiveLabel(NpcMotive motive) => motive switch
@@ -178,7 +233,8 @@ public sealed class DialogueOrchestrator
     /// </summary>
     private DialogueResult RunConversation(
         string speakerId, string listenerId, string cleanUtterance, string conversationId,
-        long? causedBy, ThreatLevel threat, IReadOnlyDictionary<string, string>? extraData)
+        long? causedBy, ThreatLevel threat, OrderPromptContext? orderCtx, string? orderDirective,
+        IReadOnlyDictionary<string, string>? extraData)
     {
         _exchangesPerConversation.TryGetValue(conversationId, out var used);
         var budgetLeft = AIRules.MaxExchangesPerConversation - used;
@@ -203,9 +259,10 @@ public sealed class DialogueOrchestrator
                 ListenerName = _context.DisplayNameOf(listenerId),
                 ConversationId = conversationId,
                 Utterance = cleanUtterance,
-                ContextPrompt = _context.BuildPrompt(speakerId, listenerId, cleanUtterance, _difficulty, _clock(), threat),
+                ContextPrompt = _context.BuildPrompt(speakerId, listenerId, cleanUtterance, _difficulty, _clock(), threat, orderCtx),
                 Difficulty = _difficulty,
                 BudgetLeft = budgetLeft,
+                OrderDirective = orderDirective,
             };
 
             var response = _provider.Complete(request);
@@ -258,11 +315,18 @@ public sealed class DialogueOrchestrator
 
         if (applied is not null)
         {
+            // Phase 14: trust shifts scale with the speaker's manipulability tier; the
+            // reported delta is the scaled (actually applied) value.
+            var tier = _manipulation?.TierOf(speakerId) ?? ManipulabilityTier.Standard;
+            var trustDelta = ManipulabilityRules.ScaleTrustShift(tier, applied.TrustDelta);
             _social.Adjust(speakerId, listenerId,
-                new SocialDelta(Trust: applied.TrustDelta, Suspicion: applied.SuspicionDelta),
+                new SocialDelta(Trust: trustDelta, Suspicion: applied.SuspicionDelta),
                 "dialogue", causedBy: exchange.Id);
             foreach (var fact in applied.NewFacts)
                 _cognition.AddEvidence(listenerId, fact, supports: true, causedBy: exchange.Id);
+            // Phase 14: despair accumulates (tier-scaled inside the service); hitting 100
+            // triggers suicide via the service, causally linked to this exchange.
+            _manipulation?.AdjustDespair(speakerId, applied.DespairDelta, exchange.Id);
         }
 
         _exchangesPerConversation[conversationId] = used + 1;
@@ -273,11 +337,75 @@ public sealed class DialogueOrchestrator
             ReplyText = replyText,
             ExchangeEventId = exchange.Id,
             FallbackReason = fallbackReason,
-            TrustDelta = applied?.TrustDelta ?? 0,
+            TrustDelta = applied is null ? 0
+                : ManipulabilityRules.ScaleTrustShift(
+                    _manipulation?.TierOf(speakerId) ?? ManipulabilityTier.Standard,
+                    applied.TrustDelta),
             SuspicionDelta = applied?.SuspicionDelta ?? 0,
+            DespairDelta = applied?.DespairDelta ?? 0,
             UsedFallback = usedFallback,
         };
     }
+
+    /// <summary>
+    /// Phase 14: resolves a location name fragment to a location id for GoTo orders.
+    /// Exact id match first, then a small Indonesian alias table (the player may order
+    /// in Indonesian), then case-insensitive name containment — deterministic (first
+    /// by id order). Null content (bare test setups) resolves nothing.
+    /// </summary>
+    private string? ResolveLocationName(string fragment)
+    {
+        if (_content is null || string.IsNullOrWhiteSpace(fragment)) return null;
+        var f = fragment.Trim().ToLowerInvariant();
+        if (_content.HasLocation(f)) return f;
+        if (IndonesianLocationAliases.TryGetValue(f, out var aliased)
+            && _content.HasLocation(aliased))
+            return aliased;
+        // Multi-word fragments: try each word against the alias table too.
+        foreach (var word in f.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            if (IndonesianLocationAliases.TryGetValue(word, out var w) && _content.HasLocation(w))
+                return w;
+        // Name containment, then a word-level fallback: "the warehouse" does not
+        // contain-match "Abandoned Warehouse District", but the word "warehouse"
+        // does. Short words ("the", "di") are skipped to avoid junk matches.
+        var byName = _content.Locations
+            .Where(l => l.Name.ToLowerInvariant().Contains(f))
+            .OrderBy(l => l.Id, StringComparer.Ordinal)
+            .Select(l => l.Id)
+            .FirstOrDefault();
+        if (byName is not null) return byName;
+        foreach (var word in f.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (word.Length < 4) continue;
+            var byWord = _content.Locations
+                .Where(l => l.Name.ToLowerInvariant().Contains(word) || l.Id.ToLowerInvariant().Contains(word))
+                .OrderBy(l => l.Id, StringComparer.Ordinal)
+                .Select(l => l.Id)
+                .FirstOrDefault();
+            if (byWord is not null) return byWord;
+        }
+        return null;
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> IndonesianLocationAliases =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["gudang"] = "loc_warehouse",
+            ["warehouse"] = "loc_warehouse",
+            ["pasar"] = "loc_central_market",
+            ["gereja"] = "loc_church",
+            ["katedral"] = "loc_cathedral",
+            ["balai kota"] = "loc_city_hall",
+            ["kedai"] = "loc_tavern",
+            ["tavern"] = "loc_tavern",
+            ["kantor polisi"] = "loc_guard_station",
+            ["pos jaga"] = "loc_guard_station",
+            ["hutan"] = "loc_forest",
+            ["pemakaman"] = "loc_cemetery",
+            ["kuburan"] = "loc_cemetery",
+            ["pelabuhan"] = "loc_harbor",
+            ["permukiman"] = "loc_residential",
+        };
 
     private string FallbackLine(string conversationId, int index)
     {

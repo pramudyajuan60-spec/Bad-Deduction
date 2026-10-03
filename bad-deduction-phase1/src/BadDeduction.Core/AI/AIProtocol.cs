@@ -19,6 +19,13 @@ public sealed class AIRequest
     public string ContextPrompt { get; set; } = "";
     public Difficulty Difficulty { get; set; }
     public int BudgetLeft { get; set; }
+    /// <summary>
+    /// Phase 14: the compliance verdict for a detected player order, for providers that
+    /// want to answer consistently with it ("accept:GoTo" / "refuse:Attack"). Null when
+    /// no order was detected. The Ollama provider ignores it (it reads ContextPrompt);
+    /// the mock uses it to pick accept/refuse templates deterministically.
+    /// </summary>
+    public string? OrderDirective { get; set; }
 }
 
 /// <summary>
@@ -35,6 +42,13 @@ public sealed class DialogueOutput
     public List<string> NewFacts { get; set; } = new();
     public string? NewMemorySummary { get; set; }
     public string? RelationshipNote { get; set; }
+    /// <summary>
+    /// Phase 14: how much darker (positive) or lighter (negative) this conversation
+    /// left the speaker feeling. The validator clamps it to ±
+    /// <see cref="AIRules.MaxDespairDelta"/>; the orchestrator scales it by the
+    /// speaker's manipulability tier before applying it to their despair meter.
+    /// </summary>
+    public int DespairDelta { get; set; }
 }
 
 /// <summary>

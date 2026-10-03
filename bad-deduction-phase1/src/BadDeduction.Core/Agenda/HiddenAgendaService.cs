@@ -69,6 +69,52 @@ public sealed class HiddenAgendaService : IDeceptionHook
             .OrderBy(id => id, StringComparer.Ordinal)
             .ToList();
 
+    /// <summary>
+    /// Phase 14: visible enemy agency. Returns where an NPC-held genius is currently
+    /// drawn to, so the simulation can stage them there through normal travel
+    /// (wired as <c>WorldSimulation.StrategicDestinationFor</c>). Malvr lurks near
+    /// their elimination target at night (22:00-04:00); Lumiel works their pursued
+    /// crime at its scene. Null for everyone else, and entirely inert unless roles
+    /// were assigned through the seeded canonical path (same guard as
+    /// <see cref="StrategicTick"/>).
+    /// <para/>
+    /// Director-level staging: it moves the piece using actual positions, like
+    /// routine movement does — it never grants the holder knowledge they don't have
+    /// and never leaks into anything the holder says.
+    /// </summary>
+    public string? StrategicDestinationFor(string npcId)
+    {
+        if (!_state.Agenda.RolesSeeded) return null;
+        if (!_state.Truth.HiddenRoles.TryGetValue(npcId, out var role)) return null;
+        if (npcId == _state.Player.CharacterId) return null;
+        if (!_state.World.Characters.TryGetValue(npcId, out var holder) || !holder.IsAlive)
+            return null;
+
+        if (role == HiddenRole.Malvr)
+        {
+            var hour = new GameTime(_state.TotalMinutes).Hour;
+            if (hour < 22 && hour >= 4) return null; // lurk at night only
+            var targetId = ObjectivesOf(npcId)
+                .Where(o => o.Kind == ObjectiveKind.EliminateObstacle && o.Status == ObjectiveStatus.Active)
+                .Select(o => o.TargetId)
+                .FirstOrDefault();
+            if (targetId is null) return null;
+            if (!_state.World.Characters.TryGetValue(targetId, out var target) || !target.IsAlive)
+                return null;
+            return target.CurrentLocationId == holder.CurrentLocationId ? null : target.CurrentLocationId;
+        }
+
+        var lead = ObjectivesOf(npcId)
+            .Where(o => o.Kind == ObjectiveKind.PursueLead && o.Status == ObjectiveStatus.Active
+                        && o.CrimeId is not null)
+            .OrderBy(o => o.Id, StringComparer.Ordinal)
+            .FirstOrDefault();
+        if (lead?.CrimeId is null) return null;
+        if (!_state.Crime.Crimes.TryGetValue(lead.CrimeId, out var crime)) return null;
+        if (!_state.Crime.Scenes.TryGetValue(crime.SceneId, out var scene)) return null;
+        return scene.LocationId == holder.CurrentLocationId ? null : scene.LocationId;
+    }
+
     public IReadOnlyList<HiddenObjective> ObjectivesOf(string holderId) =>
         _state.Agenda.Objectives.Values
             .Where(o => o.HolderId == holderId)

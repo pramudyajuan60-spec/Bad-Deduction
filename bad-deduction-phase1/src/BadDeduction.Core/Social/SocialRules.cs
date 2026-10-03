@@ -18,6 +18,13 @@ public static class SocialRules
     /// <summary>Design §10: police trust toward Lumiel at the start of a run.</summary>
     public const int PoliceStartingTrust = 90;
 
+    /// <summary>
+    /// Phase 14: every NPC's trust toward the PLAYER starts at exactly 20 (the user's
+    /// explicit rule — "semua diawali dengan angka 20"). Personality nudges do not
+    /// apply to player pairs; NPC↔NPC edges keep their kind-based baselines.
+    /// </summary>
+    public const int PlayerStartingTrust = 20;
+
     // Police ladder floors (inclusive): trust >= 70 cooperates, >= 45 questions, >= 25 verifies on its own,
     // anything lower treats the subject as a suspect.
     public const int CooperationFloor = 70;

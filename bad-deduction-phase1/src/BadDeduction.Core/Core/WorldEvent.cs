@@ -69,4 +69,8 @@ public static class WorldEventTypes
     public const string AgendaObjectiveCompleted = "agenda.objective_completed";
     public const string AgendaObjectiveFailed = "agenda.objective_failed";
     public const string AgendaWarning = "agenda.warning";
+    public const string OrderAccepted = "order.accepted";
+    public const string OrderRefused = "order.refused";
+    public const string OrderExecuted = "order.executed";
+    public const string ManipulationSuicide = "manipulation.suicide";
 }

@@ -6,6 +6,7 @@ using BadDeduction.Content;
 using BadDeduction.Crime;
 using BadDeduction.Initiative;
 using BadDeduction.Investigation;
+using BadDeduction.Manipulation;
 using BadDeduction.Police;
 using BadDeduction.Social;
 using BadDeduction.World;
@@ -50,6 +51,12 @@ public sealed class GameSession
     /// reports). Wired into <see cref="Dialogue"/>; also callable directly.
     /// </summary>
     public ThreatService Threat { get; }
+
+    /// <summary>
+    /// Phase 14: manipulation — order evaluation/execution, despair and suicide,
+    /// lure destinations, knowledge-gated routine observation.
+    /// </summary>
+    public ManipulationService Manipulation { get; }
 
     /// <summary>
     /// Phase 13: NPC-initiated dialogue. Call <see cref="Initiative.NpcInitiativeService.Evaluate"/>
@@ -112,6 +119,13 @@ public sealed class GameSession
         Simulate = new WorldSimulation(state, Time, Events, World, Cognition, content);
         Simulate.CanEnter = Police.CanEnter;
         Simulate.DutyLocationFor = Police.DutyLocationFor;
+        // Phase 14: old saves predate the manipulation state; property initializers
+        // supply the defaults (no migration needed — same pattern as Phase 13).
+        state.Manipulation ??= new ManipulationState();
+        Manipulation = new ManipulationService(state, Events, Social, Compliance, Cognition,
+            Police, content, Schedules);
+        Simulate.CommandedDestinationFor = Manipulation.CommandedDestinationFor;
+        Simulate.StrategicDestinationFor = Agenda.StrategicDestinationFor;
         View = new PlayerView(state);
         Debug = new DebugAccess(state);
         // Phase 13: old saves predate the initiative stream, so their InitiativeRng is
@@ -135,7 +149,9 @@ public sealed class GameSession
             BuildForbiddenPhrases(state),
             state.Meta.Difficulty,
             state.Meta.RunSeed,
-            threatService: Threat);
+            threatService: Threat,
+            manipulationService: Manipulation,
+            content: content);
         Rng = new DeterministicRandom(state.SimRng);
     }
 

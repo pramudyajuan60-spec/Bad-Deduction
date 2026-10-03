@@ -67,6 +67,12 @@ public sealed class GameState
     public NpcInitiativeState Initiative { get; set; } = new();
 
     /// <summary>
+    /// Phase 14: despair meters, lure destinations, player-learned routines
+    /// (plain data; see ManipulationService). Additive with defaults — no migration.
+    /// </summary>
+    public Manipulation.ManipulationState Manipulation { get; set; } = new();
+
+    /// <summary>
     /// Phase 10: hidden-genius objectives and incident attributions (plain data; see
     /// HiddenAgendaService). Truth-side like WorldTruth: never exposed to gameplay UI.
     /// </summary>

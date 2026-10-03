@@ -49,6 +49,37 @@ public sealed class MockAIProvider : IAIProvider
         "{L} threatened me.",
     };
 
+    /// <summary>
+    /// Phase 14: when the orchestrator reports a compliance verdict
+    /// (<see cref="AIRequest.OrderDirective"/>), the mock voices it from dedicated
+    /// template pools instead of the generic one — still a pure function of the hash,
+    /// validator-safe, with small fixed deltas.
+    /// </summary>
+    private static readonly string[] OrderAcceptTemplates =
+    {
+        "Alright, {L}. I'll do it.",
+        "Fine. Consider it done, {L}.",
+        "Hm... alright, {L}. For you, I'll do it.",
+    };
+
+    private static readonly string[] OrderRefuseTemplates =
+    {
+        "No. I won't do that, {L}.",
+        "Are you out of your mind, {L}? Absolutely not.",
+        "I can't do that. Don't ask me again, {L}.",
+    };
+
+    /// <summary>
+    /// Phase 14: utterances carrying these words press on the speaker's despair.
+    /// English + Indonesian. The mock proposes a small deterministic despair delta
+    /// (0-3) so the suicide meter moves even without an LLM.
+    /// </summary>
+    private static readonly string[] DespairWords =
+    {
+        "hopeless", "worthless", "no point", "give up", "end it",
+        "putus asa", "tak berguna", "tidak berguna", "menyerah", "bunuh diri",
+    };
+
     private readonly ulong _seed;
 
     public MockAIProvider(ulong seed) => _seed = seed;
@@ -62,6 +93,9 @@ public sealed class MockAIProvider : IAIProvider
 
         if (ThreatDetector.Detect(request.Utterance) != ThreatLevel.None)
             return ThreatResponse(request, h);
+
+        if (request.OrderDirective is not null)
+            return OrderResponse(request, h);
 
         var reply = ReplyTemplates[h % (ulong)ReplyTemplates.Length]
             .Replace("{S}", request.SpeakerName, StringComparison.Ordinal)
@@ -85,9 +119,38 @@ public sealed class MockAIProvider : IAIProvider
             ReplyText = reply,
             TrustDelta = trust,
             SuspicionDelta = suspicion,
+            DespairDelta = DespairFor(request.Utterance, h),
             NewFacts = facts,
             NewMemorySummary = $"talked with {request.ListenerName}.",
         });
+    }
+
+    private static AIResponse OrderResponse(AIRequest request, ulong h)
+    {
+        var accepted = request.OrderDirective!.StartsWith("accept:", StringComparison.Ordinal);
+        var pool = accepted ? OrderAcceptTemplates : OrderRefuseTemplates;
+        var reply = pool[h % (ulong)pool.Length]
+            .Replace("{L}", request.ListenerName, StringComparison.Ordinal);
+        return AIResponse.Accept(new DialogueOutput
+        {
+            ReplyText = reply,
+            TrustDelta = accepted ? 2 : -1,
+            SuspicionDelta = accepted ? 0 : 2,
+            DespairDelta = DespairFor(request.Utterance, h),
+            NewFacts = new List<string>(),
+            NewMemorySummary = $"{request.ListenerName} asked me to do something; I " +
+                (accepted ? "agreed." : "refused."),
+        });
+    }
+
+    /// <summary>Deterministic despair proposal: 0-3 when the utterance presses on despair, else 0.</summary>
+    private static int DespairFor(string utterance, ulong h)
+    {
+        var lower = utterance.ToLowerInvariant();
+        foreach (var word in DespairWords)
+            if (lower.Contains(word, StringComparison.Ordinal))
+                return (int)(h % 4);
+        return 0;
     }
 
     private static AIResponse ThreatResponse(AIRequest request, ulong h)

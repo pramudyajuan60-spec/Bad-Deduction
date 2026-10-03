@@ -23,4 +23,12 @@ public static class AIRules
 
     /// <summary>Exchanges allowed per conversation before the budget is exhausted (risk 4).</summary>
     public const int MaxExchangesPerConversation = 10;
+
+    /// <summary>
+    /// Phase 14: despair_delta is clamped to ±this, never rejected — like trust/
+    /// suspicion, a loud number is a calibration issue, not a lie. 15 per exchange
+    /// means driving someone to suicide (100) takes at least 7 sustained exchanges
+    /// even before tier scaling, so it cannot happen by accident.
+    /// </summary>
+    public const int MaxDespairDelta = 15;
 }

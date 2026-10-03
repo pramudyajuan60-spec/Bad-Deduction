@@ -81,13 +81,20 @@ public sealed class SocialService
         Require(from);
         Require(to);
         if (from == to) throw new ArgumentException("A character has no relationship with itself.");
+        // Phase 14: the player's trust meter starts at exactly 20 for every NPC
+        // (SocialRules.PlayerStartingTrust) — personality nudges don't apply to
+        // player pairs. NPC↔NPC pairs keep their kind-based baselines.
+        var playerId = _state.Player.CharacterId;
+        var playerPair = !string.IsNullOrEmpty(playerId) && (from == playerId || to == playerId);
         var e = _graph.Get(from, to);
         if (e is not null)
             return new RelationshipView(from, to, true, e.Kind, e.Trust, e.Fear, e.Respect, e.Loyalty, e.Suspicion, e.Influence, e.Affection, e.Resentment);
         var v = SocialBaselines.Resting(null, PersonalityOf(from), PersonalityOf(to));
         return new RelationshipView(from, to, false, null,
-            v[(int)RelationshipAxis.Trust], v[(int)RelationshipAxis.Fear], v[(int)RelationshipAxis.Respect], v[(int)RelationshipAxis.Loyalty],
-            v[(int)RelationshipAxis.Suspicion], v[(int)RelationshipAxis.Influence], v[(int)RelationshipAxis.Affection], v[(int)RelationshipAxis.Resentment]);
+            playerPair ? SocialRules.PlayerStartingTrust : v[(int)RelationshipAxis.Trust],
+            v[(int)RelationshipAxis.Fear], v[(int)RelationshipAxis.Respect], v[(int)RelationshipAxis.Loyalty],
+            v[(int)RelationshipAxis.Suspicion], v[(int)RelationshipAxis.Influence], v[(int)RelationshipAxis.Affection],
+            v[(int)RelationshipAxis.Resentment]);
     }
 
     /// <summary>
@@ -110,6 +117,10 @@ public sealed class SocialService
             _graph.Connect(from, to, RelationshipKind.Acquaintance);
             edge = _graph.Get(from, to)!;
             created = true;
+            // Phase 14: player pairs start at exactly Trust 20 (SocialRules.PlayerStartingTrust).
+            var playerId = _state.Player.CharacterId;
+            if (!string.IsNullOrEmpty(playerId) && (from == playerId || to == playerId))
+                edge.SetAxis(RelationshipAxis.Trust, SocialRules.PlayerStartingTrust);
         }
 
         var data = new Dictionary<string, string> { ["reason"] = reason };

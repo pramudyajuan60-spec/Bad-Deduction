@@ -108,6 +108,23 @@ public sealed class WorldSimulation
     /// </summary>
     public Func<string, int, string?>? DutyLocationFor { get; set; }
 
+    /// <summary>
+    /// Phase 14 lure seam, wired to <see cref="Manipulation.ManipulationService.CommandedDestinationFor"/>
+    /// by GameSession. A commanded NPC travels toward (and waits at) the ordered location
+    /// instead of following their routine, until the order expires. Null = no command.
+    /// </summary>
+    public Func<string, string?>? CommandedDestinationFor { get; set; }
+
+    /// <summary>
+    /// Phase 14 strategic-movement seam, wired to
+    /// <see cref="Agenda.HiddenAgendaService.StrategicDestinationFor"/> by GameSession.
+    /// Lets the NPC-held genius visibly work their objectives on the map (Malvr lurking
+    /// near their target at night, Lumiel working a crime scene) through the same
+    /// travel machinery as everyone else. Director-level staging only — it moves the
+    /// piece, it never grants the holder knowledge they don't have.
+    /// </summary>
+    public Func<string, string?>? StrategicDestinationFor { get; set; }
+
     /// <summary>Advances time and simulates the world minute by minute. Deterministic per seed.</summary>
     public void Advance(int minutes)
     {
@@ -203,6 +220,22 @@ public sealed class WorldSimulation
     {
         var c = _state.World.Characters[id];
         if (_state.World.ActiveTravels.ContainsKey(id)) return; // en route: arrivals resolve per-minute
+
+        // Phase 14: directed movement wins over routine — a player's lure first, then
+        // the hidden genius's strategic staging. Both travel through the same machinery
+        // (witnessed departures/arrivals, cordon checks) as routine movement.
+        var directed = CommandedDestinationFor?.Invoke(id) ?? StrategicDestinationFor?.Invoke(id);
+        if (directed is not null)
+        {
+            if (c.CurrentLocationId != directed)
+            {
+                StartTravel(c, directed, now);
+                return;
+            }
+            SetActivity(c, Activity.Idle, "waiting as directed");
+            return;
+        }
+
         var time = new GameTime(now);
         var blocks = BlocksFor(id, time.Day);
         var (block, index) = BlockAt(blocks, time.MinuteOfDay);

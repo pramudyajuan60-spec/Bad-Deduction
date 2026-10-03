@@ -24,7 +24,10 @@ namespace BadDeduction.AI;
 /// <item>UTTERANCE — what the listener just said, verbatim (truncated).</item>
 /// <item>THREAT — when the listener's utterance was classified as a threat: speaker-known
 ///   reaction guidance (their own fear/courage, the location). Only present when a threat
-///   was detected; uses no hidden information.</item>
+///   was detected (Phase 13).</item>
+/// <item>ORDER — when the listener's utterance was classified as an order: the pre-made
+///   compliance verdict (comply/refuse + decisive factor), voiced in character. Only
+///   present when an order was detected (Phase 14).</item>
 /// <item>INSTRUCTIONS — reply in character within the length cap, plus the structured fields.</item>
 /// </list>
 /// <para/>
@@ -37,6 +40,19 @@ namespace BadDeduction.AI;
 /// The speaker's own secrets are deliberately NOT included yet: guarding them is Phase 10
 /// (hidden objectives) work, and no validator rule could catch a slip today.
 /// </summary>
+/// <summary>
+/// Phase 14: the compliance verdict handed to the prompt builder. The description is
+/// the player's own request in plain words; Complied and DecisiveFactor come from
+/// <see cref="Social.ComplianceEvaluator"/> (the speaker's own trust value and the
+/// factor that mattered most) — all speaker-known, so the leak test still passes.
+/// </summary>
+public sealed class OrderPromptContext
+{
+    public string Description { get; set; } = "";
+    public bool Complied { get; set; }
+    public string DecisiveFactor { get; set; } = "";
+}
+
 public sealed class ContextEngine
 {
     private readonly PlayerView _view;
@@ -76,9 +92,14 @@ public sealed class ContextEngine
     /// provider reacts to the threat in character instead of ignoring it. Optional so all
     /// existing call sites keep compiling.
     /// </param>
+    /// <param name="order">
+    /// Phase 14: the <see cref="OrderDetector"/> classification plus the pre-made
+    /// compliance verdict. When not null, an ORDER section voices the verdict in
+    /// character. Optional so all existing call sites keep compiling.
+    /// </param>
     public string BuildPrompt(
         string speakerId, string listenerId, string utterance, Difficulty difficulty, GameTime now,
-        ThreatLevel threat = ThreatLevel.None)
+        ThreatLevel threat = ThreatLevel.None, OrderPromptContext? order = null)
     {
         var speaker = RequireProfile(speakerId);
         var listener = RequireProfile(listenerId);
@@ -144,17 +165,44 @@ public sealed class ContextEngine
         sb.AppendLine();
         if (threat != ThreatLevel.None)
             AppendThreatSection(sb, speakerId, listener, rel, threat);
+        if (order is not null)
+            AppendOrderSection(sb, listener, order);
         sb.AppendLine(
             $"Reply in character in at most {AIRules.MaxReplyLength} characters. " +
             "Address what they just said FIRST and DIRECTLY — answer their question, react to their words, " +
             "and only then add anything else. " +
             "Then decide, as structured fields: trust_delta (-20..20, how this changes your trust in them), " +
-            "suspicion_delta (-20..20), new_facts (things you learned from them, as short phrases, max 5), " +
+            $"suspicion_delta (-20..20), despair_delta (-{AIRules.MaxDespairDelta}..{AIRules.MaxDespairDelta}, " +
+            "how much darker (positive) or lighter (negative) this conversation left you feeling — " +
+            "move it ONLY when they truly press on your hopelessness, grief, or worthlessness, or genuinely lift it), " +
+            "new_facts (things you learned from them, as short phrases, max 5), " +
             "memory_summary (one line for your memory of this exchange), " +
             "relationship_note (optional, one line). " +
             "Never reveal anything you do not actually know; never speak of hidden masters or secret roles.");
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Phase 14: order-compliance context, built ONLY from the player's own words (the
+    /// description) and the speaker's own decision factors (their trust value, the
+    /// decisive factor name). The DECISION is made by the compliance evaluator before
+    /// the provider is consulted — the provider only voices it in character.
+    /// </summary>
+    private static void AppendOrderSection(
+        StringBuilder sb, PublicCharacterInfo listener, OrderPromptContext order)
+    {
+        var verdict = order.Complied
+            ? $"you weighed the request and decided to DO IT ({order.DecisiveFactor})"
+            : $"you weighed the request and decided to REFUSE it ({order.DecisiveFactor})";
+        sb.AppendLine(
+            $"ORDER: {listener.DisplayName} just asked you to: {order.Description}. " +
+            $"You are not a puppet — {verdict}. " +
+            "Respond IN CHARACTER and DIRECTLY: if you agreed, acknowledge it naturally and briefly; " +
+            "if you refused, decline in your own words — give a reason or don't, as fits your personality. " +
+            "A fearful person may comply while trembling; a proud person refuses bluntly; " +
+            "a cunning person may agree without meaning it. NEVER ignore the request or change the subject.");
+        sb.AppendLine();
     }
 
     /// <summary>
